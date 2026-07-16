@@ -22,7 +22,6 @@ display-firmware/src/wifi_config.h
 
 # Kiosk config (contains WiFi/MQTT/API credentials)
 kiosk-terminal/kiosk_config.ini
-kiosk-terminal/kiosk_config*.ini
 kiosk-terminal/kiosk_defaults.ini
 
 # Managed ESP-IDF components (fetched at build time)
