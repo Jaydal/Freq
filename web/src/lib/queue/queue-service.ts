@@ -85,87 +85,88 @@ export async function joinQueue(params: JoinQueueParams): Promise<QueueEntry> {
   const supabase = await createClient();
 
   // Run independent checks in parallel to reduce round trips
-  const [memberRes, ratesRes, waitingRes] = await Promise.all([
+  const [memberRes, ratesRes] = await Promise.all([
     supabase.from('members').select('status').eq('id', params.memberId).single(),
     getRates(supabase),
-    supabase.from('queue_entries').select('*', { count: 'exact', head: true }).eq('status', 'waiting'),
   ]);
 
   if (!memberRes.data || memberRes.data.status !== 'Active') throw new Error('Member not active');
 
   const rates = ratesRes;
   const charge = calcCharge(rates, params.duration, params.partySize);
-  const waitingCount = waitingRes.count;
 
-  if (!waitingCount || waitingCount === 0) {
-    let court = null;
+  // Always attempt to book a free court directly. A waiting entry for a DIFFERENT
+  // court must NOT block booking a currently free court — otherwise a caller who
+  // picks an available court while another court has a waiter would be wrongly
+  // pushed into the queue (leaving the free court unused). When no court is
+  // specified we pick any free court via findAvailableCourt.
+  let court = null;
 
-    if (params.courtId) {
-      const { data: selected } = await supabase
-        .from('courts')
-        .select('id, name, status')
-        .eq('id', params.courtId)
-        .single();
-      if (selected && selected.status === 'Available') {
-        const now = new Date();
-        const slotFree = await isSlotAvailable(selected.id, now, new Date(now.getTime() + params.duration * 60_000));
-        if (slotFree) court = selected;
-      }
-    } else {
-      court = await findAvailableCourt(params.start, params.duration, params.partySize);
+  if (params.courtId) {
+    const { data: selected } = await supabase
+      .from('courts')
+      .select('id, name, status')
+      .eq('id', params.courtId)
+      .single();
+    if (selected && selected.status === 'Available') {
+      const now = new Date();
+      const slotFree = await isSlotAvailable(selected.id, now, new Date(now.getTime() + params.duration * 60_000));
+      if (slotFree) court = selected;
     }
+  } else {
+    court = await findAvailableCourt(params.start, params.duration, params.partySize);
+  }
 
-    if (court) {
-      const { data: game, error: gameErr } = await supabase
-        .from('games')
-        .insert({
-          court_id: court.id,
-          match_type: params.partySize === 4 ? '2v2' : '1v1',
-          match_title: params.matchTitle ?? null,
-          duration: params.duration,
-          status: 'In Progress',
-          start_time: new Date().toISOString(),
-          charge_amount: charge,
-        })
-        .select()
-        .single();
-
-      if (gameErr) throw new Error(gameErr.message);
-
-      // Batch insert all game_players in one query
-      const { error: gpErr } = await supabase
-        .from('game_players')
-        .insert(params.playerIds.map(pid => ({ game_id: game.id, member_id: pid, team: null })));
-      if (gpErr) throw new Error(gpErr.message);
-
-      const { error: courtErr } = await supabase
-        .from('courts')
-        .update({ status: 'In Game', last_activity: new Date().toISOString() })
-        .eq('id', court.id);
-      if (courtErr) throw new Error(courtErr.message);
-
-      await deductWallet(params.memberId, charge, game.id);
-
-      // Fire-and-forget: publish board update without blocking the response
-      publishDisplay(court.id, generatePayload(court.id, {
-        current: { name: params.matchTitle || `${params.partySize === 4 ? '2v2' : '1v1'}`, startTime: new Date().toISOString(), durationMinutes: params.duration },
-        upcoming: []
-      }));
-
-      return {
-        id: game.id,
-        member_id: params.memberId,
-        requested_start: params.start.toISOString(),
-        duration: params.duration,
-        party_size: params.partySize,
-        player_ids: params.playerIds,
+  if (court) {
+    const { data: game, error: gameErr } = await supabase
+      .from('games')
+      .insert({
         court_id: court.id,
-        status: 'completed',
-        expires_at: null,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      } as QueueEntry;
-    }
+        match_type: params.partySize === 4 ? '2v2' : '1v1',
+        match_title: params.matchTitle ?? null,
+        duration: params.duration,
+        status: 'In Progress',
+        start_time: new Date().toISOString(),
+        charge_amount: charge,
+      })
+      .select()
+      .single();
+
+    if (gameErr) throw new Error(gameErr.message);
+
+    // Batch insert all game_players in one query
+    const { error: gpErr } = await supabase
+      .from('game_players')
+      .insert(params.playerIds.map(pid => ({ game_id: game.id, member_id: pid, team: null })));
+    if (gpErr) throw new Error(gpErr.message);
+
+    const { error: courtErr } = await supabase
+      .from('courts')
+      .update({ status: 'In Game', last_activity: new Date().toISOString() })
+      .eq('id', court.id);
+    if (courtErr) throw new Error(courtErr.message);
+
+    await deductWallet(params.memberId, charge, game.id);
+
+    // Fire-and-forget: publish board update without blocking the response
+    publishDisplay(court.id, generatePayload(court.id, {
+      current: { name: params.matchTitle || `${params.partySize === 4 ? '2v2' : '1v1'}`, startTime: new Date().toISOString(), durationMinutes: params.duration },
+      upcoming: []
+    }));
+
+    return {
+      id: game.id,
+      member_id: params.memberId,
+      requested_start: params.start.toISOString(),
+      duration: params.duration,
+      party_size: params.partySize,
+      player_ids: params.playerIds,
+      court_id: court.id,
+      status: 'completed',
+      expires_at: null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    } as QueueEntry;
   }
 
   // Join the queue
