@@ -119,7 +119,16 @@ export async function processWaitingEntries(): Promise<void> {
   const prepSec = isNaN(rawPrepSec) ? 300 : rawPrepSec;
 
   for (const entry of waiting) {
-    for (const court of availableCourts) {
+    // Respect court preference: a waiter who chose a specific court may only be
+    // booked onto THAT court. Only unpreferred (court_id IS NULL) waiters are
+    // eligible for distribution across any available court. This keeps a
+    // court-1-preferring waiter in the waiting list when a different court is
+    // free, instead of silently being reassigned away from their choice.
+    const candidateCourts = entry.court_id
+      ? availableCourts.filter(c => c.id === entry.court_id)
+      : availableCourts;
+
+    for (const court of candidateCourts) {
       const now = new Date();
       const effectivePrep = effectivePrepSec(entry.duration, prepSec);
       const end = new Date(now.getTime() + effectivePrep * 1000 + entry.duration * 60_000);
