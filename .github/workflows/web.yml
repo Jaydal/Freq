@@ -3,6 +3,7 @@ name: Web
 on:
   push:
     branches: [main]
+    tags: ["v*"]
     paths: ["web/**"]
   pull_request:
     branches: [main]

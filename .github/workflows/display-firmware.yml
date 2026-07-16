@@ -22,6 +22,6 @@ jobs:
           path: |
             ~/.platformio
             display-firmware/.pio
-          key: pio-${{ runner.os }}-${{ hashFiles('display-firmware/platformio.ini') }}
+          key: pio-display-${{ runner.os }}-${{ hashFiles('display-firmware/platformio.ini') }}
       - run: pip install platformio
       - run: pio run -e esp32-hub75-wf2

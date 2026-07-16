@@ -1,0 +1,42 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.platformio
+          key: pio-release-${{ runner.os }}-${{ hashFiles('display-firmware/platformio.ini', 'kiosk-terminal/platformio.ini') }}
+
+      - run: pip install platformio
+
+      - name: Build display firmware
+        run: |
+          pio run -e esp32-hub75-wf2
+          cp .pio/build/esp32-hub75-wf2/firmware.bin ${{ github.workspace }}/display-firmware.bin
+        working-directory: display-firmware
+
+      - name: Build kiosk firmware
+        run: |
+          pio run -e waveshare-7b
+          cp .pio/build/waveshare-7b/firmware.bin ${{ github.workspace }}/kiosk-firmware.bin
+        working-directory: kiosk-terminal
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          generate_release_notes: true
+          files: |
+            display-firmware.bin
+            kiosk-firmware.bin
