@@ -1,0 +1,16 @@
+#pragma once
+// Copy this file to wifi_config.h and fill in real values.
+// wifi_config.h is git-ignored — never commit credentials.
+
+#define WIFI_SSID     "your_venue_wifi_name"
+#define WIFI_PASSWORD "your_venue_wifi_password"
+
+// HiveMQ Cloud (MQTTS — TLS required). Matches web/.env.local MQTT_BROKER_URL.
+#define MQTT_BROKER   "your-cluster.s1.eu.hivemq.cloud"
+#define MQTT_PORT     8883
+#define MQTT_USER     "frequency"
+#define MQTT_PASSWORD "your_password"
+
+// Court UUID — copy from the web dashboard Settings > Courts.
+// One controller = one court. Each WF2 gets its own COURT_ID.
+#define COURT_ID      "court-1"

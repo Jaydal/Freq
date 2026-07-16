@@ -1,0 +1,35 @@
+# PlatformIO
+firmware/.pio
+firmware/hdwf2/.pio
+firmware/.vscode/.browse.c_cpp.db*
+firmware/.vscode/c_cpp_properties.json
+firmware/.vscode/launch.json
+firmware/.vscode/ipch
+firmware/hdwf2/.vscode/.browse.c_cpp.db*
+firmware/hdwf2/.vscode/c_cpp_properties.json
+firmware/hdwf2/.vscode/launch.json
+firmware/hdwf2/.vscode/ipch
+
+# Web app
+web/.next
+web/node_modules
+web/.env.local
+
+# Secrets — never commit
+firmware/src/wifi_config.h
+firmware/hdwf2/src/wifi_config.h
+display-firmware/src/wifi_config.h
+
+# Kiosk config (contains WiFi/MQTT/API credentials)
+kiosk-terminal/kiosk_config.ini
+kiosk-terminal/kiosk_config*.ini
+kiosk-terminal/kiosk_defaults.ini
+
+# Managed ESP-IDF components (fetched at build time)
+kiosk-terminal/managed_components/
+
+# Scratch / temp
+test.txt
+test-rfid.js
+*.local
+.DS_Store

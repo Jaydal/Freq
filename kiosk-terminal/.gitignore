@@ -1,0 +1,8 @@
+build/
+.pio/
+sdkconfig
+sdkconfig.old
+# Written at runtime by the sim's config store (stand-in for ESP32 NVS)
+kiosk_config.ini
+# Local prefill defaults for the setup form (secrets) — never commit
+kiosk_defaults.ini

@@ -1,0 +1,51 @@
+# ── Target ──────────────────────────────────────────────────────────────────
+CONFIG_IDF_TARGET="esp32s3"
+
+# ── PSRAM (Octal SPI, 8 MB) ────────────────────────────────────────────────
+# PSRAM and flash share the MSPI bus on ESP32-S3, so PSRAM can only reach
+# 120 MHz when the flash clock is also 120 MHz. These values match Waveshare's
+# reference config and are required to keep the RGB LCD DMA fed (otherwise the
+# panel loses VSYNC and the screen rolls/flickers).
+CONFIG_SPIRAM=y
+CONFIG_SPIRAM_MODE_OCT=y
+CONFIG_SPIRAM_SPEED_120M=y
+CONFIG_SPIRAM_BOOT_INIT=y
+CONFIG_SPIRAM_ALLOW_BSS_SEG_EXTERNAL_MEMORY=y
+CONFIG_SPIRAM_ALLOW_STACK_EXTERNAL_MEMORY=y
+CONFIG_SPIRAM_FETCH_INSTRUCTIONS=y
+CONFIG_SPIRAM_RODATA=y
+
+# ── Flash (QIO, 16 MB, 120 MHz) ────────────────────────────────────────────
+CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
+CONFIG_ESPTOOLPY_FLASHMODE_QIO=y
+CONFIG_ESPTOOLPY_FLASHFREQ_120M=y
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+
+# ── FreeRTOS ────────────────────────────────────────────────────────────────
+CONFIG_FREERTOS_HZ=1000
+CONFIG_FREERTOS_TIMER_TASK_STACK_DEPTH=4096
+
+# ── LVGL requires a large main task stack for deep widget hierarchies ──────
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=16384
+
+# ── Wi-Fi ───────────────────────────────────────────────────────────────────
+CONFIG_ESP_WIFI_STATIC_RX_BUFFER_NUM=16
+CONFIG_ESP_WIFI_DYNAMIC_RX_BUFFER_NUM=32
+CONFIG_ESP_WIFI_DYNAMIC_TX_BUFFER_NUM=32
+
+# ── MQTT ────────────────────────────────────────────────────────────────────
+CONFIG_MQTT_TRANSPORT_SSL=y
+CONFIG_MQTT_BUFFER_SIZE=4096
+
+# ── HTTP client ─────────────────────────────────────────────────────────────
+CONFIG_ESP_HTTP_CLIENT_ENABLE_HTTPS=y
+
+# ── TLS (mbedTLS) ───────────────────────────────────────────────────────────
+CONFIG_MBEDTLS_CERTIFICATE_BUNDLE=y
+CONFIG_MBEDTLS_CERTIFICATE_BUNDLE_DEFAULT_FULL=y
+CONFIG_MBEDTLS_EXTERNAL_MEM_ALLOC=y
+
+# ── Logging ─────────────────────────────────────────────────────────────────
+CONFIG_LOG_DEFAULT_LEVEL_INFO=y
+CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y

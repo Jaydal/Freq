@@ -1,0 +1,15 @@
+## IDF Component Manager
+# This file declares ESP-IDF component dependencies pulled from the
+# ESP Component Registry (https://components.espressif.com/).
+#
+# PlatformIO's ESP-IDF integration reads this file automatically.
+
+dependencies:
+  # LVGL v8.2.x — matches the simulator's FetchContent(GIT_TAG v8.2.0).
+  lvgl/lvgl: "~8.2.0"
+
+  # GT911 capacitive touch driver for the Waveshare 7B's I2C touch panel.
+  espressif/esp_lcd_touch_gt911: "1.0.4"
+
+  # Base esp_lcd_touch interface (pulled transitively, but declared for clarity).
+  espressif/esp_lcd_touch: "1.0.4"
