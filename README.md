@@ -29,7 +29,7 @@ cd web && npm run dev
 
 ### `display-firmware/` — LED Scoreboard
 
-Hardware: Huidu HD-WF2 (ESP32-S3) driving 2× P10 RGB LED Matrix Panels (Hub75, 64×32px total). "Dumb" display client — subscribes to MQTT and renders playlist pages with local rotation timing.
+Hardware: [Huidu HD-WF2](https://www.huidu.com/product/7137845807125983) (ESP32-S3) driving 2× [P10 RGB LED Matrix Panels](https://www.aliexpress.com/w/wholesale-p10-rgb-led-matrix-panel.html) (Hub75, 64×32px total). "Dumb" display client — subscribes to MQTT and renders playlist pages with local rotation timing.
 
 ```bash
 cd display-firmware && pio run -e esp32-hub75-wf2
@@ -37,7 +37,7 @@ cd display-firmware && pio run -e esp32-hub75-wf2
 
 ### `kiosk-terminal/` — Touchscreen Kiosk
 
-Hardware: ESP32-S3 RGB LCD with PN532 RFID reader. LVGL UI that scans RFID cards, lets users select court/game/duration, and joins the queue via REST API. Receives live queue state via MQTT (`freq/board`).
+Hardware: [ESP32-S3 RGB LCD board](https://www.waveshare.com/esp32-s3-touch-lcd-7.htm) (Waveshare 7" or similar) with [PN532 NFC/RFID reader](https://www.elechouse.com/product/pn532-nfc-rfid-module-v4/). LVGL UI that scans RFID cards, lets users select court/game/duration, and joins the queue via REST API. Receives live queue state via MQTT (`freq/board`).
 
 ```bash
 cd kiosk-terminal && cmake -B build -S . && cmake --build build -j && ./build/kiosk_sim
@@ -61,6 +61,6 @@ cd kiosk-terminal && cmake -B build -S . && cmake --build build -j && ./build/ki
 
 ## Infrastructure
 
-- **Supabase:** PostgreSQL database, Realtime subscriptions, auth
-- **HiveMQ Cloud:** MQTT broker for hardware communication
-- **Vercel:** Web app deployment (`project-frequency`)
+- **[Supabase](https://supabase.com):** PostgreSQL database, Realtime subscriptions, auth
+- **[HiveMQ Cloud](https://www.hivemq.com/mqtt-cloud-broker/):** MQTT broker for hardware communication
+- **[Vercel](https://vercel.com):** Web app deployment (`project-frequency`)
