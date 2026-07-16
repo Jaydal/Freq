@@ -110,6 +110,11 @@ describe('finalizeBooking', () => {
         chain.eq = vi.fn(() => chain);
         chain.single = vi.fn(async () => ({ data: null, error: null }));
       }
+      if (t === 'games') {
+        chain.eq = vi.fn(() => chain);
+        chain.update = vi.fn(() => chain);
+        chain.single = vi.fn(async () => ({ data: { start_time: '2026-07-07T14:00:00Z' }, error: null }));
+      }
       return chain;
     });
     vi.mocked(createClient).mockResolvedValue(db as any);
@@ -171,6 +176,11 @@ describe('finalizeBooking', () => {
         chain.in = vi.fn(() => chain);
         chain.eq = vi.fn(() => chain);
         chain.single = vi.fn(async () => ({ data: null, error: null }));
+      }
+      if (t === 'games') {
+        chain.eq = vi.fn(() => chain);
+        chain.update = vi.fn(() => chain);
+        chain.single = vi.fn(async () => ({ data: { start_time: '2026-07-07T14:00:00Z' }, error: null }));
       }
       return chain;
     });

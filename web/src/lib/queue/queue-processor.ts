@@ -39,47 +39,49 @@ export async function processCourt(courtId: string): Promise<void> {
     .or(`court_id.eq.${courtId},court_id.is.null`)
     .order('created_at', { ascending: true });
 
-  if (!waiting || waiting.length === 0) {
-    await publishDisplay(courtId, generatePayload(courtId, { current: null, upcoming: [] }));
-    return;
-  }
+  if (waiting && waiting.length > 0) {
+    for (const entry of waiting) {
+      const now = new Date();
+      const effectivePrep = effectivePrepSec(entry.duration, prepSec);
+      const end = new Date(now.getTime() + effectivePrep * 1000 + entry.duration * 60_000);
+      const available = await isSlotAvailable(courtId, now, end);
 
-  for (const entry of waiting) {
-    const now = new Date();
-    const effectivePrep = effectivePrepSec(entry.duration, prepSec);
-    const end = new Date(now.getTime() + effectivePrep * 1000 + entry.duration * 60_000);
-    const available = await isSlotAvailable(courtId, now, end);
+      if (available) {
+        const { data: freshEntry } = await supabase
+          .from('queue_entries')
+          .select('status')
+          .eq('id', entry.id)
+          .single();
 
-    if (available) {
-      const { data: freshEntry } = await supabase
-        .from('queue_entries')
-        .select('status')
-        .eq('id', entry.id)
-        .single();
-
-      if (!freshEntry || freshEntry.status !== 'waiting') {
-        continue;
-      }
-
-      const { data: claimed } = await supabase
-        .from('queue_entries')
-        .update({ status: 'accepted', court_id: courtId, updated_at: new Date().toISOString() })
-        .eq('id', entry.id)
-        .eq('status', 'waiting')
-        .select();
-
-      if (claimed && claimed.length > 0) {
-        const result = await finalizeBooking(entry.id, { bookCourt: true });
-        if (!result.success) {
-          console.error(`[queue-processor] Auto-book failed for entry ${entry.id}:`, result.error);
+        if (!freshEntry || freshEntry.status !== 'waiting') {
+          continue;
         }
-      }
 
-      // After booking, try to match remaining waiters with other available courts
-      await processWaitingEntries();
-      return;
+        const { data: claimed } = await supabase
+          .from('queue_entries')
+          .update({ status: 'accepted', court_id: courtId, updated_at: new Date().toISOString() })
+          .eq('id', entry.id)
+          .eq('status', 'waiting')
+          .select();
+
+        if (claimed && claimed.length > 0) {
+          const result = await finalizeBooking(entry.id, { bookCourt: true });
+          if (!result.success) {
+            console.error(`[queue-processor] Auto-book failed for entry ${entry.id}:`, result.error);
+          }
+        }
+
+        // Booked this court; stop trying to fill it again.
+        break;
+      }
     }
   }
+
+  // Always attempt to match remaining waiters against every other available
+  // court. This must run even when THIS court had no eligible waiter (e.g. an
+  // offer was declined/expired), otherwise waiters who prefer a different free
+  // court would be stranded and the queue would appear "stuck".
+  await processWaitingEntries();
 
   await publishDisplay(courtId, generatePayload(courtId, { current: null, upcoming: [] }));
 }
@@ -98,7 +100,7 @@ export async function processWaitingEntries(): Promise<void> {
   const { data: activeGames } = await supabase
     .from('games')
     .select('court_id')
-    .eq('status', 'In Progress');
+    .in('status', ['In Progress', 'Scheduled']);
 
   const busyCourts = new Set((activeGames ?? []).map(g => g.court_id));
 

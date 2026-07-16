@@ -130,7 +130,8 @@ describe('processWaitingEntries', () => {
         c.update = vi.fn(() => ({ eq: eq1 }))
       } else if (t === 'games') {
         c.select = vi.fn(() => c)
-        c.eq = vi.fn(async () => ({ data: games, error: null }))
+        c.eq = vi.fn(() => c)
+        c.in = vi.fn(async () => ({ data: games, error: null }))
       } else if (t === 'courts') {
         c.order = vi.fn(async () => ({ data: courts, error: null }))
       }
