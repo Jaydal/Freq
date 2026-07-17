@@ -131,7 +131,10 @@ describe('processWaitingEntries', () => {
       } else if (t === 'games') {
         c.select = vi.fn(() => c)
         c.eq = vi.fn(() => c)
+        // processWaitingEntries now reads games with a bare .select() (no .in),
+        // so return the active games for that query too.
         c.in = vi.fn(async () => ({ data: games, error: null }))
+        c.select = vi.fn(async () => ({ data: games, error: null }))
       } else if (t === 'courts') {
         c.order = vi.fn(async () => ({ data: courts, error: null }))
       }
@@ -171,9 +174,11 @@ describe('processWaitingEntries', () => {
   })
 
   it('does nothing when all courts busy', async () => {
+    const now = new Date();
     makeProcessWaitingDb({
-      waitingEntries: [{ id: 'qe-1', member_id: 'm1', requested_start: '2026-07-07T14:00:00Z', duration: 60, party_size: 2, player_ids: ['m1'] }],
-      activeGames: [{ court_id: 'c1' }],
+      waitingEntries: [{ id: 'qe-1', member_id: 'm1', requested_start: now.toISOString(), duration: 60, party_size: 2, player_ids: ['m1'] }],
+      // Currently-active game on c1 (start_time now, duration 60 => window still open)
+      activeGames: [{ court_id: 'c1', start_time: now.toISOString(), duration: 60 }],
       courts: [{ id: 'c1' }],
     })
     await processWaitingEntries()

@@ -92,9 +92,20 @@ export async function getBoardSnapshot(supabase: SupabaseClient): Promise<BoardS
   const gameByCourt = new Map<string, any>();
   (games ?? []).forEach((g: any) => { if (!gameByCourt.has(g.court_id)) gameByCourt.set(g.court_id, g); });
 
+  // A court is "active" purely from its schedule: a game whose window
+  // (start_time + prep + duration) has NOT yet ended. This makes the board
+  // self-correcting with the clock — no background job needs to flip
+  // games.status -> Completed / courts.status -> Available for the view.
+  const isActiveNow = (g: any): boolean => {
+    if (!g || !g.start_time) return false;
+    const prep = effectivePrepSec(g.duration ?? 0, prepTimeSec);
+    const end = new Date(g.start_time).getTime() + prep * 1000 + (g.duration ?? 0) * 60_000;
+    return Date.now() < end;
+  };
+
   const courts: BoardCourt[] = (allCourts ?? []).map((c: any) => {
     const game = gameByCourt.get(c.id);
-    if (game && game.start_time) {
+    if (game && game.start_time && isActiveNow(game)) {
       return {
         id: c.id,
         name: c.name,

@@ -14,7 +14,7 @@ import { ReservationOffer } from './ReservationOffer';
 import { BookingSuccess } from './BookingSuccess';
 import { ErrorScreen } from './ErrorScreen';
 import type { ProductsConfig } from '@/lib/products-config-types';
-import { getCost } from '@/lib/products-config-types';
+import { getCost, effectivePrepSec } from '@/lib/products-config-types';
 import { AlertCircle, Trash2, Plus } from 'lucide-react';
 import { getRfidFormats } from '@/lib/rfid';
 
@@ -232,18 +232,28 @@ export function TerminalKiosk() {
 
     const { data: games } = await supabase
       .from('games')
-      .select('id, court_id, duration, status, start_time')
-      .in('status', ['In Progress', 'Scheduled']);
+      .select('id, court_id, duration, status, start_time');
     const { data: allCourts } = await supabase
       .from('courts')
       .select('*')
       .order('name');
     if (!allCourts) return;
-    const busyIds = new Set((games ?? []).map((g: any) => g.court_id));
+
+    // A court is busy purely from its schedule: a game whose window
+    // (start_time + prep + duration) still includes now.
+    const prepSec = config?.prepTimeSec ?? 300;
+    const now = Date.now();
+    const busyIds = new Set<string>();
+    for (const g of (games ?? [])) {
+      if (!g.start_time) continue;
+      const prep = effectivePrepSec(g.duration ?? 0, prepSec);
+      const end = new Date(g.start_time).getTime() + prep * 1000 + (g.duration ?? 0) * 60_000;
+      if (now < end) busyIds.add(g.court_id);
+    }
     setCourts(allCourts.map((c: any) => ({
       id: c.id,
       name: c.name,
-      status: busyIds.has(c.id) ? 'Playing' : (c.status === 'Available' ? 'Available' : c.status),
+      status: busyIds.has(c.id) ? 'Playing' : 'Available',
     })));
   }
 

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { phaseForElapsed } from './CourtStatusCard';
+import { phaseForElapsed, isActiveNow } from './CourtStatusCard';
 import { effectivePrepSec } from '@/lib/products-config-types';
 
 interface CourtState {
@@ -29,7 +29,8 @@ function CourtOverviewItem({ court, prepTimeSec }: { court: CourtState; prepTime
     return () => clearInterval(id);
   }, [court.status, court.start_time]);
 
-  const elapsed = court.status === 'In Progress' && court.start_time
+  const isActive = isActiveNow(court, now);
+  const elapsed = isActive && court.start_time
     ? Math.max(0, Math.floor((now - new Date(court.start_time).getTime()) / 1000))
     : 0;
 
@@ -37,13 +38,13 @@ function CourtOverviewItem({ court, prepTimeSec }: { court: CourtState; prepTime
   const phase = phaseForElapsed(elapsed, effectivePrep);
 
   return (
-    <div className={`shrink-0 w-[140px] sm:w-auto rounded px-2 py-1.5 border ${court.status === 'In Progress' ? (phase === 'preparing' ? 'bg-zinc-900 border-amber-500/20' : 'bg-zinc-900 border-emerald-500/20') : 'bg-zinc-900/50 border-zinc-800'}`}>
+    <div className={`shrink-0 w-[140px] sm:w-auto rounded px-2 py-1.5 border ${isActive ? (phase === 'preparing' ? 'bg-zinc-900 border-amber-500/20' : 'bg-zinc-900 border-emerald-500/20') : 'bg-zinc-900/50 border-zinc-800'}`}>
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1.5 overflow-hidden">
-          <span className={`size-1.5 shrink-0 rounded-full ${court.status === 'In Progress' ? (phase === 'preparing' ? 'bg-amber-400' : 'bg-emerald-400') : 'bg-zinc-600'}`} />
+          <span className={`size-1.5 shrink-0 rounded-full ${isActive ? (phase === 'preparing' ? 'bg-amber-400' : 'bg-emerald-400') : 'bg-zinc-600'}`} />
           <span className="text-xs font-medium text-zinc-300 truncate">{court.name}</span>
         </div>
-        {court.status === 'In Progress' && (
+        {isActive && (
           <span className="text-xs font-mono text-zinc-400 tabular-nums shrink-0 ml-2">{formatTime(elapsed)}</span>
         )}
       </div>
@@ -71,20 +72,23 @@ export function CourtOverview() {
 
     const { data: games } = await supabase
       .from('games')
-      .select('court_id, status, start_time, duration')
-      .in('status', ['In Progress', 'Scheduled']);
+      .select('court_id, start_time, duration');
 
     const now = Date.now();
+    const isActive = (g: any): boolean => {
+      if (!g || !g.start_time) return false;
+      const prep = effectivePrepSec(g.duration ?? 0, prepTimeSec);
+      const end = new Date(g.start_time).getTime() + prep * 1000 + (g.duration ?? 0) * 60_000;
+      return now < end;
+    };
     setCourts(courtsData.map((c: any) => {
-      const game = (games ?? []).find((g: any) => g.court_id === c.id);
+      const game = (games ?? []).find((g: any) => g.court_id === c.id && isActive(g));
       if (game && game.start_time) {
         return {
           id: c.id,
           name: c.name,
-          status: game.status === 'In Progress' ? 'In Progress' : 'Scheduled',
-          elapsed: game.status === 'In Progress'
-            ? Math.floor((now - new Date(game.start_time).getTime()) / 1000)
-            : 0,
+          status: 'In Progress',
+          elapsed: Math.floor((now - new Date(game.start_time).getTime()) / 1000),
           duration: game.duration,
           start_time: game.start_time,
         };

@@ -1,7 +1,7 @@
 'use server';
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
-import { processCourt } from '@/lib/queue/queue-processor';
+import { processCourt, processWaitingEntries } from '@/lib/queue/queue-processor';
 import { publishBoardOnce } from '@/lib/queue/board-publisher';
 
 export async function updateCourt(courtId: string, name: string, newId?: string) {
@@ -31,11 +31,13 @@ export async function endGame(gameId: string, courtId: string, refund: boolean =
     .single();
   if (!game) throw new Error('Game not found');
 
+  // Status is derived from the schedule, so we no longer need to flip
+  // games.status -> 'Completed' / courts.status -> 'Available' for the view.
+  // The board shows the court free automatically once its window ends.
   await supabase
     .from('games')
     .update({ status: 'Completed', end_time: now })
     .eq('id', gameId);
-  await supabase.from('courts').update({ status: 'Available', last_activity: now }).eq('id', courtId);
 
   if (refund && game.charge_amount) {
     const memberIds = (game.game_players ?? []).map((gp: any) => gp.member_id).filter(Boolean);
@@ -135,7 +137,6 @@ export async function requeueGame(gameId: string, courtId: string, position: num
     .from('games')
     .update({ status: 'Completed', end_time: now })
     .eq('id', gameId);
-  await supabase.from('courts').update({ status: 'Available', last_activity: now }).eq('id', courtId);
 
   const { data: allWaiting } = await supabase
     .from('queue_entries')
@@ -171,5 +172,10 @@ export async function requeueGame(gameId: string, courtId: string, position: num
   });
   if (error) throw new Error(error.message);
 
+  // Re-publish the board with the new schedule and advance any waiter onto a
+  // now-free court (schedule is the source of truth; courts.status is no
+  // longer flipped for the view).
+  await processWaitingEntries();
+  publishBoardOnce().catch(() => {});
   revalidatePath('/courts');
 }

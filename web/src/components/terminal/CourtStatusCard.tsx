@@ -28,18 +28,29 @@ export function phaseForElapsed(elapsed: number, prepTimeSec: number): 'preparin
   return elapsed < prepTimeSec ? 'preparing' : 'in_game';
 }
 
+// A court is active purely from its schedule: a game whose window
+// (start_time + prep + duration) has not yet ended.
+export function isActiveNow(court: CourtStatusData, nowMs = Date.now()): boolean {
+  if (!court.start_time) return false;
+  const rawPrepTime = court.prepTimeSec ?? 300;
+  const prepTime = court.duration ? effectivePrepSec(court.duration, rawPrepTime) : rawPrepTime;
+  const end = new Date(court.start_time).getTime() + prepTime * 1000 + (court.duration ?? 0) * 60_000;
+  return nowMs < end;
+}
+
 export function CourtStatusCard({ court }: Props) {
   const [now, setNow] = useState(Date.now());
 
+  const isActive = isActiveNow(court, now);
+
   useEffect(() => {
-    if (court.status !== 'In Progress' || !court.start_time) return;
+    if (!isActive || !court.start_time) return;
     const id = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(id);
-  }, [court.status, court.start_time]);
+  }, [isActive, court.start_time]);
 
   const rawPrepTime = court.prepTimeSec ?? 300;
   const prepTime = court.duration ? effectivePrepSec(court.duration, rawPrepTime) : rawPrepTime;
-  const isActive = court.status === 'In Progress';
 
   const elapsed = isActive && court.start_time
     ? Math.max(0, Math.floor((now - new Date(court.start_time).getTime()) / 1000))

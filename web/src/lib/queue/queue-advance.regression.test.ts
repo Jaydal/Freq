@@ -129,14 +129,14 @@ describe('REGRESSION: queue advances / courts free correctly', () => {
     const newGame = tables.games.find(g => g.id !== 'g1')
 
     console.log('g1.status =', g1.status)
-    console.log('court.status =', tables.courts[0].status)
     console.log('waiter.status =', waiter.status, 'court_id =', waiter.court_id)
     console.log('newGame =', newGame?.id, newGame?.status)
 
-    expect(g1.status).toBe('Completed')          // old game closed
-    expect(waiter.status).toBe('completed')       // waiter got booked
+    // Status is now derived from the schedule, so the old game is NOT flipped to
+    // 'Completed'. Instead it simply stops being "busy" because its window ended.
+    expect(g1.status).toBe('In Progress')         // row kept as historical record
+    expect(waiter.status).toBe('completed')       // waiter got booked onto freed court
     expect(newGame).toBeTruthy()                   // a new game was created
-    expect(tables.courts[0].status).toBe('In Game')
   })
 
   it('does NOT double-book a court that has a Scheduled (not yet started) game', async () => {

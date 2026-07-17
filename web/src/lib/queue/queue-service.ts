@@ -103,17 +103,19 @@ export async function joinQueue(params: JoinQueueParams): Promise<QueueEntry> {
   let court = null;
 
   if (params.courtId) {
-    const { data: selected } = await supabase
-      .from('courts')
-      .select('id, name, status')
-      .eq('id', params.courtId)
-      .single();
-    if (selected && selected.status === 'Available') {
-      const now = new Date();
-      const slotFree = await isSlotAvailable(selected.id, now, new Date(now.getTime() + params.duration * 60_000));
-      if (slotFree) court = selected;
-    }
-  } else {
+      const { data: selected } = await supabase
+        .from('courts')
+        .select('id, name, status')
+        .eq('id', params.courtId)
+        .single();
+      // Book directly only if the court has no active game right now (schedule-
+      // based via isSlotAvailable), independent of the stale courts.status column.
+      if (selected) {
+        const now = new Date();
+        const slotFree = await isSlotAvailable(selected.id, now, new Date(now.getTime() + params.duration * 60_000));
+        if (slotFree) court = selected;
+      }
+    } else {
     court = await findAvailableCourt(params.start, params.duration, params.partySize);
   }
 

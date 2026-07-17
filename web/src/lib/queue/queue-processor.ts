@@ -97,12 +97,25 @@ export async function processWaitingEntries(): Promise<void> {
 
   if (!waiting || waiting.length === 0) return;
 
+  const { data: settings } = await supabase.from('settings').select('value').eq('key', 'preparationTime').single();
+  const rawPrepSec = parseInt(settings?.value ?? '300', 10);
+  const prepSec = isNaN(rawPrepSec) ? 300 : rawPrepSec;
+
   const { data: activeGames } = await supabase
     .from('games')
-    .select('court_id')
-    .in('status', ['In Progress', 'Scheduled']);
+    .select('court_id, start_time, duration');
 
-  const busyCourts = new Set((activeGames ?? []).map(g => g.court_id));
+  // A court is "busy now" from its schedule: a game whose window
+  // (start_time + prep + duration) still includes `now`. This is schedule-based
+  // and does not depend on games.status being flipped to 'Completed'.
+  const now = new Date();
+  const busyCourts = new Set<string>();
+  for (const g of (activeGames ?? [])) {
+    if (!g.start_time) continue;
+    const prep = effectivePrepSec(g.duration ?? 0, prepSec);
+    const end = new Date(new Date(g.start_time).getTime() + prep * 1000 + (g.duration ?? 0) * 60_000);
+    if (now < end) busyCourts.add(g.court_id);
+  }
 
   const { data: allCourts } = await supabase
     .from('courts')
@@ -113,10 +126,6 @@ export async function processWaitingEntries(): Promise<void> {
 
   const availableCourts = allCourts.filter(c => !busyCourts.has(c.id));
   if (availableCourts.length === 0) return;
-
-  const { data: settings } = await supabase.from('settings').select('value').eq('key', 'preparationTime').single();
-  const rawPrepSec = parseInt(settings?.value ?? '300', 10);
-  const prepSec = isNaN(rawPrepSec) ? 300 : rawPrepSec;
 
   for (const entry of waiting) {
     // Respect court preference: a waiter who chose a specific court may only be
@@ -173,10 +182,14 @@ export async function processExpiredGames(): Promise<void> {
   const rawPrepSec = parseInt(settings?.value ?? '300', 10);
   const prepSec = isNaN(rawPrepSec) ? 300 : rawPrepSec;
 
+  // Status is derived from the schedule, so we no longer flip games.status ->
+  // 'Completed' or courts.status -> 'Available' for the view. We only need to
+  // detect courts whose schedule window has just ended and advance any waiting
+  // entries onto them (a real register_game mutation). The board itself will
+  // show these courts as free automatically via schedule derivation.
   const { data: active } = await supabase
     .from('games')
-    .select('id, court_id, start_time, duration')
-    .eq('status', 'In Progress');
+    .select('id, court_id, start_time, duration');
 
   if (!active) return;
 
@@ -186,16 +199,7 @@ export async function processExpiredGames(): Promise<void> {
     const end = new Date(new Date(game.start_time).getTime() + effectivePrep * 1000 + game.duration * 60_000);
     if (end > now) continue;
 
-    await supabase
-      .from('games')
-      .update({ status: 'Completed', end_time: end.toISOString() })
-      .eq('id', game.id);
-
-    await supabase
-      .from('courts')
-      .update({ status: 'Available', last_activity: now.toISOString() })
-      .eq('id', game.court_id);
-
+    // Court's schedule ended: try to fill it from the waiting list.
     await processCourt(game.court_id);
   }
 
