@@ -2,6 +2,8 @@
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import { publishBoardOnce } from '@/lib/queue/board-publisher';
+import { publishDisplay } from '@/lib/mqtt';
+import { generatePayload } from '@/lib/display/sports-caster';
 
 export async function updateCourt(courtId: string, name: string, newId?: string) {
   const supabase = await createClient();
@@ -64,6 +66,7 @@ export async function endGame(gameId: string, courtId: string, refund: boolean =
     }
   }
 
+  await publishDisplay(courtId, generatePayload(courtId, { current: null, upcoming: [] }));
   publishBoardOnce().catch(() => {});
   revalidatePath('/courts');
 }

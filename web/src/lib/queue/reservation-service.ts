@@ -14,7 +14,7 @@ async function getChargeAmount(duration: number, partySize: number): Promise<num
   return cost;
 }
 
-export async function finalizeBooking(entryId: string, options?: { bookCourt?: boolean }): Promise<{ success: boolean; error?: string }> {
+export async function finalizeBooking(entryId: string): Promise<{ success: boolean; error?: string }> {
   const supabase = await createClient();
 
   const { data: entry } = await supabase
@@ -24,11 +24,10 @@ export async function finalizeBooking(entryId: string, options?: { bookCourt?: b
     .single();
   if (!entry) return { success: false, error: 'Queue entry not found' };
 
-  const validStatus = options?.bookCourt ? ['offered', 'accepted'] : ['offered'];
-  if (!validStatus.includes(entry.status)) return { success: false, error: 'Offer already processed' };
+  if (entry.status !== 'offered') return { success: false, error: 'Offer already processed' };
 
-  if (!options?.bookCourt && new Date(entry.expires_at) < new Date()) {
-    await expireOffer(entryId, entry.court_id);
+  if (new Date(entry.expires_at) < new Date()) {
+    await expireOffer(entryId);
     return { success: false, error: 'Offer expired' };
   }
 
@@ -103,12 +102,12 @@ export async function finalizeBooking(entryId: string, options?: { bookCourt?: b
   return { success: true };
 }
 
-export async function declineOffer(entryId: string, courtId: string | null): Promise<void> {
+export async function declineOffer(entryId: string): Promise<void> {
   const supabase = await createClient();
   await supabase.from('queue_entries').update({ status: 'declined', updated_at: new Date().toISOString() }).eq('id', entryId);
 }
 
-export async function expireOffer(entryId: string, courtId: string | null): Promise<void> {
+export async function expireOffer(entryId: string): Promise<void> {
   const supabase = await createClient();
   await supabase.from('queue_entries').update({ status: 'expired', updated_at: new Date().toISOString() }).eq('id', entryId);
 }

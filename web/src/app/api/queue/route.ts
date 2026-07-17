@@ -95,8 +95,6 @@ export async function PATCH(request: Request) {
   const { id, action } = result.data;
 
   try {
-    // publish the refreshed board after the accept/decline mutation runs
-    const publishAfter = async () => { await publishBoardOnce(); };
     if (action === 'accept') {
       const res = await finalizeBooking(id);
       if (!res.success) {
@@ -109,14 +107,12 @@ export async function PATCH(request: Request) {
         const { data: court } = await supabase.from('courts').select('name').eq('id', entry.court_id).single();
         courtName = court?.name;
       }
-      await publishAfter();
+      await publishBoardOnce();
       return NextResponse.json({ success: true, courtName }, { status: 200 });
     }
 
-    const supabase = await createClient();
-    const { data: entry } = await supabase.from('queue_entries').select('court_id').eq('id', id).single();
-    await declineOffer(id, entry?.court_id ?? null);
-    await publishAfter();
+    await declineOffer(id);
+    await publishBoardOnce();
     return NextResponse.json({ success: true }, { status: 200 });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';
