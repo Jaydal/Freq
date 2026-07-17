@@ -1,7 +1,6 @@
 'use server';
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
-import { processCourt, processWaitingEntries } from '@/lib/queue/queue-processor';
 import { publishBoardOnce } from '@/lib/queue/board-publisher';
 
 export async function updateCourt(courtId: string, name: string, newId?: string) {
@@ -31,9 +30,6 @@ export async function endGame(gameId: string, courtId: string, refund: boolean =
     .single();
   if (!game) throw new Error('Game not found');
 
-  // Status is derived from the schedule, so we no longer need to flip
-  // games.status -> 'Completed' / courts.status -> 'Available' for the view.
-  // The board shows the court free automatically once its window ends.
   await supabase
     .from('games')
     .update({ status: 'Completed', end_time: now })
@@ -68,7 +64,7 @@ export async function endGame(gameId: string, courtId: string, refund: boolean =
     }
   }
 
-  await processCourt(courtId);
+  publishBoardOnce().catch(() => {});
   revalidatePath('/courts');
 }
 
@@ -115,9 +111,6 @@ export async function reassignQueueEntry(entryId: string, courtId: string | null
     .eq('id', entryId);
   if (error) throw new Error(error.message);
 
-  if (courtId) {
-    await processCourt(courtId);
-  }
   publishBoardOnce().catch(() => {});
   revalidatePath('/courts');
 }
@@ -148,7 +141,6 @@ export async function requeueGame(gameId: string, courtId: string, position: num
   const existingCount = allWaiting?.length ?? 0;
   const insertPosition = Math.max(0, Math.min(position, existingCount));
 
-  // Insert at the chosen position by manipulating created_at
   let insertTime: Date;
   if (insertPosition === 0 || !allWaiting || allWaiting.length === 0) {
     insertTime = new Date();
@@ -172,10 +164,6 @@ export async function requeueGame(gameId: string, courtId: string, position: num
   });
   if (error) throw new Error(error.message);
 
-  // Re-publish the board with the new schedule and advance any waiter onto a
-  // now-free court (schedule is the source of truth; courts.status is no
-  // longer flipped for the view).
-  await processWaitingEntries();
   publishBoardOnce().catch(() => {});
   revalidatePath('/courts');
 }

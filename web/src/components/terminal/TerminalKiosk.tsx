@@ -227,9 +227,6 @@ export function TerminalKiosk() {
   }
 
   async function fetchCourts() {
-    // Trigger queue processor tick asynchronously to advance/expire games
-    fetch('/api/queue/tick').catch(() => {});
-
     const { data: games } = await supabase
       .from('games')
       .select('id, court_id, duration, status, start_time');

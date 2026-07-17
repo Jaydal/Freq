@@ -2,12 +2,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 vi.mock('@/lib/supabase/server', () => ({ createClient: vi.fn() }))
 vi.mock('./booking-engine', () => ({ isSlotAvailable: vi.fn() }))
-vi.mock('./queue-processor', () => ({ processCourt: vi.fn() }))
 vi.mock('@/lib/mqtt', () => ({ publishDisplay: vi.fn() }))
 
 import { createClient } from '@/lib/supabase/server'
 import { isSlotAvailable } from './booking-engine'
-import { processCourt } from './queue-processor'
 import { finalizeBooking, declineOffer, expireOffer } from './reservation-service'
 
 const SETTINGS: Record<string, string> = {
@@ -39,7 +37,6 @@ function withSettingsMock(db: any) {
         };
         return chain;
     }
-    // Build a fresh chain for every other table
     const chain: any = {
       select: vi.fn(() => chain),
       eq: vi.fn(() => chain),
@@ -62,7 +59,6 @@ describe('finalizeBooking', () => {
     const db = withSettingsMock(makeDb())
     db.rpc = vi.fn(async () => ({ data: 'game-1', error: null }))
 
-    // Override queue_entries / members / courts / rfid_cards
     const orig = db.from;
     db.from = vi.fn((t: string) => {
       if (t === 'settings') {
@@ -128,7 +124,6 @@ describe('finalizeBooking', () => {
     const db = withSettingsMock(makeDb())
     db.rpc = vi.fn(async () => ({ data: 'game-1', error: null }))
 
-    // Override with an expired entry
     db.from = vi.fn((t: string) => {
       if (t === 'settings') {
         let key = '';
@@ -147,7 +142,6 @@ describe('finalizeBooking', () => {
         order: vi.fn(() => chain),
         update: vi.fn(() => chain),
         in: vi.fn(() => chain),
-        insert: vi.fn(() => chain),
       };
 
       if (t === 'queue_entries') {
@@ -158,7 +152,6 @@ describe('finalizeBooking', () => {
             party_size: 2, player_ids: ['m1', 'm2'],
             requested_start: '2026-07-07T14:00:00Z',
             status: 'offered',
-            // Entry is expired (past date)
             expires_at: '2020-01-01T00:00:00Z',
           },
           error: null,
@@ -186,7 +179,6 @@ describe('finalizeBooking', () => {
     });
     vi.mocked(createClient).mockResolvedValue(db as any);
 
-    // Should succeed despite being expired because bookCourt skips the expiry check
     const result = await finalizeBooking('qe-1', { bookCourt: true });
     expect(result.success).toBe(true);
   })
@@ -195,7 +187,6 @@ describe('finalizeBooking', () => {
     vi.mocked(isSlotAvailable).mockResolvedValue(false)
     const db = withSettingsMock(makeDb())
 
-    // Override queue_entries / members
     db.from = vi.fn((t: string) => {
       if (t === 'settings') {
         let key = '';
@@ -243,7 +234,7 @@ describe('finalizeBooking', () => {
 })
 
 describe('declineOffer', () => {
-  it('marks declined and processes next court', async () => {
+  it('marks declined', async () => {
     const db = makeDb()
     db.from = vi.fn(() => ({
       update: vi.fn(() => ({
@@ -253,12 +244,12 @@ describe('declineOffer', () => {
     vi.mocked(createClient).mockResolvedValue(db as any)
 
     await declineOffer('qe-1', 'c1')
-    expect(processCourt).toHaveBeenCalledWith('c1')
+    // No error expected
   })
 })
 
 describe('expireOffer', () => {
-  it('marks expired and processes next court', async () => {
+  it('marks expired', async () => {
     const db = makeDb()
     db.from = vi.fn(() => ({
       update: vi.fn(() => ({
@@ -268,6 +259,6 @@ describe('expireOffer', () => {
     vi.mocked(createClient).mockResolvedValue(db as any)
 
     await expireOffer('qe-1', 'c1')
-    expect(processCourt).toHaveBeenCalledWith('c1')
+    // No error expected
   })
 })

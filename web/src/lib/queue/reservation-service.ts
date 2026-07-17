@@ -1,6 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
 import { isSlotAvailable } from './booking-engine';
-import { processCourt } from './queue-processor';
 import { publishDisplay } from '@/lib/mqtt';
 import { generatePayload } from '@/lib/display/sports-caster';
 import { effectivePrepSec, getCost, ProductsConfig } from '@/lib/products-config-types';
@@ -25,8 +24,6 @@ export async function finalizeBooking(entryId: string, options?: { bookCourt?: b
     .single();
   if (!entry) return { success: false, error: 'Queue entry not found' };
 
-  // When booking court automatically, accept 'accepted' status (set by the processor's atomic claim).
-  // Otherwise, only accept 'offered'.
   const validStatus = options?.bookCourt ? ['offered', 'accepted'] : ['offered'];
   if (!validStatus.includes(entry.status)) return { success: false, error: 'Offer already processed' };
 
@@ -42,7 +39,6 @@ export async function finalizeBooking(entryId: string, options?: { bookCourt?: b
     .single();
   if (!member || member.status !== 'Active') {
     await supabase.from('queue_entries').update({ status: 'insufficient_credits', updated_at: new Date().toISOString() }).eq('id', entryId);
-    if (entry.court_id) await processCourt(entry.court_id);
     return { success: false, error: 'Member not active' };
   }
 
@@ -56,7 +52,6 @@ export async function finalizeBooking(entryId: string, options?: { bookCourt?: b
   const end = new Date(now.getTime() + effectivePrep * 1000 + entry.duration * 60_000);
   if (!entry.court_id || !(await isSlotAvailable(entry.court_id, now, end, entry.id))) {
     await supabase.from('queue_entries').update({ status: 'waiting', court_id: null, expires_at: null, updated_at: new Date().toISOString() }).eq('id', entryId);
-    if (entry.court_id) await processCourt(entry.court_id);
     return { success: false, error: 'Court no longer available' };
   }
 
@@ -83,18 +78,12 @@ export async function finalizeBooking(entryId: string, options?: { bookCourt?: b
     p_players: JSON.stringify(players),
   });
 
-  // W4: Warning - No native transaction wrapping for finalizeBooking.
-  // We check errors at each step. If register_game succeeds but subsequent updates fail,
-  // we could end up with an inconsistent state.
   if (gameErr) {
     if (gameErr.message?.toLowerCase().includes('insufficient')) {
       await supabase.from('queue_entries').update({ status: 'insufficient_credits', updated_at: new Date().toISOString() }).eq('id', entryId);
     } else {
-      // For any other register_game failure (e.g. missing RFID card), expire
-      // the entry so the queue can advance to the next waiting person.
       await supabase.from('queue_entries').update({ status: 'expired', updated_at: new Date().toISOString() }).eq('id', entryId);
     }
-    if (entry.court_id) await processCourt(entry.court_id);
     return { success: false, error: gameErr.message };
   }
 
@@ -104,7 +93,6 @@ export async function finalizeBooking(entryId: string, options?: { bookCourt?: b
 
   await supabase.from('queue_entries').update({ status: 'completed', updated_at: new Date().toISOString() }).eq('id', entryId);
 
-  // W5: Query the game's actual start_time to send to the display instead of using new Date()
   const { data: gameData } = await supabase.from('games').select('start_time').eq('id', gameId).single();
 
   await publishDisplay(entry.court_id, generatePayload(entry.court_id, {
@@ -118,11 +106,9 @@ export async function finalizeBooking(entryId: string, options?: { bookCourt?: b
 export async function declineOffer(entryId: string, courtId: string | null): Promise<void> {
   const supabase = await createClient();
   await supabase.from('queue_entries').update({ status: 'declined', updated_at: new Date().toISOString() }).eq('id', entryId);
-  if (courtId) await processCourt(courtId);
 }
 
 export async function expireOffer(entryId: string, courtId: string | null): Promise<void> {
   const supabase = await createClient();
   await supabase.from('queue_entries').update({ status: 'expired', updated_at: new Date().toISOString() }).eq('id', entryId);
-  if (courtId) await processCourt(courtId);
 }

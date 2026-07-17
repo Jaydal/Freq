@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { joinQueue, getQueuePosition, getEstimatedWait } from '@/lib/queue/queue-service';
 import { finalizeBooking, declineOffer } from '@/lib/queue/reservation-service';
-import { processWaitingEntries } from '@/lib/queue/queue-processor';
 import { publishBoardOnce } from '@/lib/queue/board-publisher';
 import { z } from 'zod';
 
@@ -60,11 +59,6 @@ export async function POST(request: Request) {
       matchTitle: result.data.matchTitle,
     });
 
-    // Try to match waiting entries with available courts
-    await processWaitingEntries();
-
-    // Push the updated board to the firmware kiosk (setInterval publishing is
-    // unreliable in Next/serverless, so we publish on every mutation instead).
     await publishBoardOnce();
 
     if (entry.status === 'completed' && entry.court_id) {
