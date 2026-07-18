@@ -61,6 +61,7 @@ add_executable(kiosk_sim
   src/hal_sim/sim_http_transport.c
   src/hal_sim/sim_mqtt_transport.c
   src/hal_sim/sim_wifi_scanner.c
+  src/hal_sim/sim_pn532.c
   src/net/freq_rest_client.c
   src/net/board_parser.c
   src/data/live/live_data_provider.c
