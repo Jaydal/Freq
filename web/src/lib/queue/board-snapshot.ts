@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { getEstimatedWait } from './queue-service';
-import { effectivePrepSec } from '@/lib/products-config-types';
+
 
 /* Server-side equivalent of the client QueueBoard's fetched state, in a flat
  * shape that maps 1:1 to the kiosk firmware's kiosk_board_t. Published to MQTT
@@ -15,7 +15,6 @@ import { effectivePrepSec } from '@/lib/products-config-types';
 export interface BoardCourt {
   id: string;
   name: string;
-  active: boolean;
   matchType: string;
   matchTitle: string;
   startTime: number; // epoch seconds; 0 when not active
@@ -92,24 +91,12 @@ export async function getBoardSnapshot(supabase: SupabaseClient): Promise<BoardS
   const gameByCourt = new Map<string, any>();
   (games ?? []).forEach((g: any) => { if (!gameByCourt.has(g.court_id)) gameByCourt.set(g.court_id, g); });
 
-  // A court is "active" purely from its schedule: a game whose window
-  // (start_time + prep + duration) has NOT yet ended. This makes the board
-  // self-correcting with the clock — no background job needs to flip
-  // games.status -> Completed / courts.status -> Available for the view.
-  const isActiveNow = (g: any): boolean => {
-    if (!g || !g.start_time) return false;
-    const prep = effectivePrepSec(g.duration ?? 0, prepTimeSec);
-    const end = new Date(g.start_time).getTime() + prep * 1000 + (g.duration ?? 0) * 60_000;
-    return Date.now() < end;
-  };
-
   const courts: BoardCourt[] = (allCourts ?? []).map((c: any) => {
     const game = gameByCourt.get(c.id);
-    if (game && game.start_time && isActiveNow(game)) {
+    if (game && game.start_time) {
       return {
         id: c.id,
         name: c.name,
-        active: true,
         matchType: game.match_type ?? '',
         matchTitle: game.match_title ?? '',
         startTime: Math.floor(new Date(game.start_time).getTime() / 1000),
@@ -123,7 +110,7 @@ export async function getBoardSnapshot(supabase: SupabaseClient): Promise<BoardS
       };
     }
     return {
-      id: c.id, name: c.name, active: false, matchType: '', matchTitle: '',
+      id: c.id, name: c.name, matchType: '', matchTitle: '',
       startTime: 0, durationMin: 0, prepTimeSec, players: [],
     };
   });

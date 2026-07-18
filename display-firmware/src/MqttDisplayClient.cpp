@@ -254,6 +254,23 @@ void MqttDisplayClient::handleMessage(uint8_t* payload, unsigned int len) {
     }
   }
 
+  // Parse schedule data for live {timer} countdown substitution
+  JsonObject currentSchedule = doc["schedule"]["current"];
+  if (!currentSchedule.isNull()) {
+    long startTimeEpoch = currentSchedule["startTimeEpoch"] | 0;
+    long durationMinutes = currentSchedule["durationMinutes"] | 0;
+    long prepTimeSec = currentSchedule["prepTimeSec"] | 0;
+    long serverTime = doc["serverTime"] | 0;
+    if (startTimeEpoch > 0 && serverTime > 0) {
+      long endTimeEpoch = startTimeEpoch + prepTimeSec + durationMinutes * 60;
+      long remainingSec = endTimeEpoch - serverTime;
+      if (remainingSec < 0) remainingSec = 0;
+      unsigned long remainingMs = (unsigned long)remainingSec * 1000;
+      unsigned long totalMs = ((unsigned long)durationMinutes * 60 + (unsigned long)prepTimeSec) * 1000;
+      _driver.setTimer(remainingMs, totalMs, millis());
+    }
+  }
+
   _currentPageIndex = 0;
   _lastPageChangeTime = millis();
 

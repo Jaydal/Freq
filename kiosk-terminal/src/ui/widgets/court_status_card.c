@@ -20,7 +20,7 @@ static void big_timer_refresh_cb(lv_event_t *e) {
   if (court_idx >= board.court_count) return;
   const court_status_t *court = &board.courts[court_idx];
   
-  if (!court->active) return;
+  if (!court_is_active(court)) return;
   
   int32_t elapsed = court_elapsed_sec(court);
   int32_t prep_sec = kiosk_effective_prep_sec(court->duration_min, court->prep_time_sec);
@@ -47,7 +47,7 @@ static void sub_timer_refresh_cb(lv_event_t *e) {
   if (court_idx >= board.court_count) return;
   const court_status_t *court = &board.courts[court_idx];
   
-  if (!court->active) return;
+  if (!court_is_active(court)) return;
   
   int32_t elapsed = court_elapsed_sec(court);
   int32_t prep_sec = kiosk_effective_prep_sec(court->duration_min, court->prep_time_sec);
@@ -77,7 +77,7 @@ lv_obj_t *court_status_card_create(lv_obj_t *parent, const court_status_t *court
   int32_t elapsed = court_elapsed_sec(court);
   court_phase_t phase = COURT_PHASE_AVAILABLE;
   int32_t prep_sec = kiosk_effective_prep_sec(court->duration_min, court->prep_time_sec);
-  if (court->active) {
+  if (court_is_active(court)) {
     phase = kiosk_phase_for_elapsed(elapsed, prep_sec);
     lv_obj_add_style(card, phase == COURT_PHASE_PREPARING ? &kiosk_style_card_preparing
                                                            : &kiosk_style_card_in_game, 0);
@@ -95,7 +95,7 @@ lv_obj_t *court_status_card_create(lv_obj_t *parent, const court_status_t *court
 
   set_label(header, court->name, &lv_font_montserrat_16, KIOSK_COLOR_ZINC_100);
 
-  if (court->active) {
+  if (court_is_active(court)) {
     set_label(header, phase == COURT_PHASE_PREPARING ? "Preparing" : "In Game", &lv_font_montserrat_14,
                phase == COURT_PHASE_PREPARING ? KIOSK_COLOR_AMBER_400 : KIOSK_COLOR_EMERALD_400);
   } else {
@@ -106,7 +106,7 @@ lv_obj_t *court_status_card_create(lv_obj_t *parent, const court_status_t *court
     set_label(card, court->match_title, &lv_font_montserrat_14, KIOSK_COLOR_ZINC_400);
   }
 
-  if (court->active) {
+  if (court_is_active(court)) {
     int32_t total_sec = court->duration_min * 60 + prep_sec;
     int32_t remaining = total_sec - elapsed;
     if (remaining < 0) remaining = 0;

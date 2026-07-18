@@ -94,8 +94,15 @@ export async function finalizeBooking(entryId: string): Promise<{ success: boole
 
   const { data: gameData } = await supabase.from('games').select('start_time').eq('id', gameId).single();
 
+  const entryMatchType = entry.party_size === 4 ? '2v2' : '1v1';
   await publishDisplay(entry.court_id, generatePayload(entry.court_id, {
-    current: { name: entry.match_title || `${entry.party_size === 4 ? '2v2' : '1v1'}`, startTime: gameData?.start_time || new Date().toISOString(), durationMinutes: entry.duration },
+    current: {
+      name: entry.match_title || entryMatchType,
+      startTime: gameData?.start_time || new Date().toISOString(),
+      durationMinutes: entry.duration,
+      matchTitle: entry.match_title || '',
+      matchType: entryMatchType,
+    },
     upcoming: []
   }));
 

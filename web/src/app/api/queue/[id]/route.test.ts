@@ -34,6 +34,7 @@ const fakeGame = {
 };
 
 const params = (id: string) => ({ params: Promise.resolve({ id }) });
+const authed = (url: string) => new Request(url, { headers: { 'X-API-Key': 'test-api-key' } });
 
 describe('DELETE /api/queue/[id]', () => {
   beforeEach(() => {
@@ -45,7 +46,7 @@ describe('DELETE /api/queue/[id]', () => {
   it('deletes a Scheduled game and returns { ok: true }', async () => {
     mockSupabaseResult.data = fakeGame;
 
-    const res = await DELETE(new Request('http://localhost'), params('g1'));
+    const res = await DELETE(authed('http://localhost'), params('g1'));
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
   });
@@ -53,14 +54,14 @@ describe('DELETE /api/queue/[id]', () => {
   it('returns 404 when game is not found', async () => {
     mockSupabaseResult.data = null;
 
-    const res = await DELETE(new Request('http://localhost'), params('missing'));
+    const res = await DELETE(authed('http://localhost'), params('missing'));
     expect(res.status).toBe(404);
   });
 
   it('returns 404 when game is not in Scheduled status', async () => {
     mockSupabaseResult.data = { ...fakeGame, status: 'In Progress' };
 
-    const res = await DELETE(new Request('http://localhost'), params('g1'));
+    const res = await DELETE(authed('http://localhost'), params('g1'));
     expect(res.status).toBe(404);
   });
 });
@@ -76,7 +77,7 @@ describe('PATCH /api/queue/[id]', () => {
     mockSupabaseResult.data = fakeGame;
     mockPublishDisplay.mockResolvedValue(undefined);
 
-    const res = await PATCH(new Request('http://localhost'), params('g1'));
+    const res = await PATCH(authed('http://localhost'), params('g1'));
     expect(res.status).toBe(200);
     expect(mockPublishDisplay).toHaveBeenCalledWith('court-1', expect.objectContaining({
       action: 'QUEUE_UPDATE',
@@ -91,7 +92,7 @@ describe('PATCH /api/queue/[id]', () => {
     };
     mockPublishDisplay.mockResolvedValue(undefined);
 
-    await PATCH(new Request('http://localhost'), params('g1'));
+    await PATCH(authed('http://localhost'), params('g1'));
     expect(mockPublishDisplay).toHaveBeenCalledWith('court-1', expect.objectContaining({
       action: 'QUEUE_UPDATE',
       state: 'PLAYING',
@@ -101,7 +102,7 @@ describe('PATCH /api/queue/[id]', () => {
   it('returns 404 when game does not exist', async () => {
     mockSupabaseResult.data = null;
 
-    const res = await PATCH(new Request('http://localhost'), params('bad'));
+    const res = await PATCH(authed('http://localhost'), params('bad'));
     expect(res.status).toBe(404);
   });
 });

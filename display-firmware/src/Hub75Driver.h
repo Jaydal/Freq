@@ -16,6 +16,7 @@ public:
   void setColorRGB(uint8_t r, uint8_t g, uint8_t b) override;
   void setScrollSpeed(uint16_t msPerPixel) override;
   void setAnimationMode(const char* mode) override;
+  void setTimer(unsigned long remainingMs, unsigned long totalMs, unsigned long baseMs) { _timerRemainingAtBaseMs = remainingMs; _timerTotalMs = totalMs; _timerBaseMs = baseMs; }
   void runDiagnosticSequence() override;
 
 private:
@@ -36,6 +37,14 @@ private:
   int _currentPage;
   unsigned long _pageLastTick;
 
+  // Timer countdown — set by MqttDisplayClient via setTimer().
+  // On each redraw, {timer} in the line text is substituted with M:SS.
+  unsigned long _timerRemainingAtBaseMs = 0;
+  unsigned long _timerTotalMs = 0;
+  unsigned long _timerBaseMs = 0;
+  unsigned long _lastTimerRedraw = 0;
+
+  String substituteTimer(const String& text) const;
   void redraw();
   void drawText5x7Scaled(const char* s, int x, int y, uint16_t color, int scale);
   int  textWidth5x7Scaled(const char* s, int scale);

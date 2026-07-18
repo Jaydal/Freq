@@ -23,7 +23,7 @@ lv_obj_t *court_overview_create(lv_obj_t *parent, const court_status_t *courts, 
     const court_status_t *c = &courts[i];
     int32_t elapsed = court_elapsed_sec(c);
     int32_t prep_sec = kiosk_effective_prep_sec(c->duration_min, c->prep_time_sec);
-    court_phase_t phase = c->active ? kiosk_phase_for_elapsed(elapsed, prep_sec) : COURT_PHASE_AVAILABLE;
+    court_phase_t phase = court_is_active(c) ? kiosk_phase_for_elapsed(elapsed, prep_sec) : COURT_PHASE_AVAILABLE;
 
     lv_obj_t *row = lv_obj_create(panel);
     lv_obj_set_width(row, lv_pct(100));
@@ -48,14 +48,14 @@ lv_obj_t *court_overview_create(lv_obj_t *parent, const court_status_t *courts, 
     lv_obj_set_size(dot, 6, 6);
     lv_obj_set_style_radius(dot, LV_RADIUS_CIRCLE, 0);
     lv_obj_set_style_border_width(dot, 0, 0);
-    lv_color_t dot_color = !c->active ? KIOSK_COLOR_ZINC_600
+    lv_color_t dot_color = !court_is_active(c) ? KIOSK_COLOR_ZINC_600
                           : (phase == COURT_PHASE_PREPARING ? KIOSK_COLOR_AMBER_400 : KIOSK_COLOR_EMERALD_400);
     lv_obj_set_style_bg_color(dot, dot_color, 0);
     lv_obj_set_style_bg_opa(dot, LV_OPA_COVER, 0);
 
     set_label(left, c->name, &lv_font_montserrat_14, KIOSK_COLOR_ZINC_300);
 
-    if (c->active) {
+    if (court_is_active(c)) {
       char time_buf[8];
       kiosk_format_time(time_buf, sizeof(time_buf), elapsed);
       set_label(row, time_buf, &lv_font_montserrat_14, KIOSK_COLOR_ZINC_400);

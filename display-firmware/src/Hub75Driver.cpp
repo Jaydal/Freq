@@ -217,7 +217,6 @@ void Hub75Driver::update() {
 
   if (_animMode == "paginate") {
     if (_pages.size() > 1) {
-       // 1500 ms per page
        if (now - _pageLastTick >= 1500) {
            _pageLastTick = now;
            _currentPage++;
@@ -236,7 +235,48 @@ void Hub75Driver::update() {
       }
     }
   }
+
+  // Update live {timer} countdown at ~1 Hz even when text is static
+  if (_timerRemainingAtBaseMs > 0 && now - _lastTimerRedraw >= 500) {
+    _lastTimerRedraw = now;
+    needsRedraw = true;
+  }
+
   if (needsRedraw) redraw();
+}
+
+// ── Timer substitution ────────────────────────────────────────────────────────
+
+String Hub75Driver::substituteTimer(const String& text) const {
+  if (_timerRemainingAtBaseMs == 0) return text;
+
+  unsigned long now = millis();
+  long remainingMs = (long)_timerRemainingAtBaseMs - (long)(now - _timerBaseMs);
+  if (remainingMs < 0) remainingMs = 0;
+
+  String result = text;
+
+  if (result.indexOf("{timer}") >= 0) {
+    int totalSec = (int)(remainingMs / 1000);
+    int min = totalSec / 60;
+    int sec = totalSec % 60;
+    char buf[8];
+    snprintf(buf, sizeof(buf), "%d:%02d", min, sec);
+    result.replace("{timer}", buf);
+  }
+
+  if (result.indexOf("{elapsed}") >= 0) {
+    long elapsedMs = (long)_timerTotalMs - remainingMs;
+    if (elapsedMs < 0) elapsedMs = 0;
+    int totalSec = (int)(elapsedMs / 1000);
+    int min = totalSec / 60;
+    int sec = totalSec % 60;
+    char buf[8];
+    snprintf(buf, sizeof(buf), "%d:%02d", min, sec);
+    result.replace("{elapsed}", buf);
+  }
+
+  return result;
 }
 
 // ── Canvas rendering ─────────────────────────────────────────────────────────
@@ -249,31 +289,34 @@ void Hub75Driver::redraw() {
     if (_currentPage >= _pages.size()) _currentPage = 0;
     Page& p = _pages[_currentPage];
     
+    String display1 = substituteTimer(p.text1);
+    String display2 = substituteTimer(p.text2);
+
     if (p.scale == 2) {
-       int w = textWidth5x7Scaled(p.text1.c_str(), 2);
+       int w = textWidth5x7Scaled(display1.c_str(), 2);
        int x = (WF2_RES_X - w) / 2;
-       drawText5x7Scaled(p.text1.c_str(), x, 1, _color, 2);
+       drawText5x7Scaled(display1.c_str(), x, 1, _color, 2);
     } else {
-       // scale = 1
-       int w1 = textWidth5x7Scaled(p.text1.c_str(), 1);
+       int w1 = textWidth5x7Scaled(display1.c_str(), 1);
        int x1 = (WF2_RES_X - w1) / 2;
-       drawText5x7Scaled(p.text1.c_str(), x1, 0, _color, 1);
-       if (p.text2.length() > 0) {
-           int w2 = textWidth5x7Scaled(p.text2.c_str(), 1);
+       drawText5x7Scaled(display1.c_str(), x1, 0, _color, 1);
+       if (display2.length() > 0) {
+           int w2 = textWidth5x7Scaled(display2.c_str(), 1);
            int x2 = (WF2_RES_X - w2) / 2;
-           drawText5x7Scaled(p.text2.c_str(), x2, 8, _color, 1);
+           drawText5x7Scaled(display2.c_str(), x2, 8, _color, 1);
        }
     }
   } else {
     if (!_lines[0].isEmpty()) {
-      int w = textWidth5x7Scaled(_lines[0].c_str(), 2);
+      String display = substituteTimer(_lines[0]);
+      int w = textWidth5x7Scaled(display.c_str(), 2);
       int x;
       if (w <= WF2_RES_X) {
         x = (WF2_RES_X - w) / 2;
       } else {
         x = _scrollX[0];
       }
-      drawText5x7Scaled(_lines[0].c_str(), x, ROW_Y[0], _color, 2);
+      drawText5x7Scaled(display.c_str(), x, ROW_Y[0], _color, 2);
     }
   }
   

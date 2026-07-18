@@ -13,22 +13,23 @@ const DEFAULTS = `{
   "idle": {
     "interval": 10,
     "pages": [
-      {"line1": "{court_name}", "line2": "COURT AVAILABLE", "line3": "WELCOME"},
-      {"line1": "{court_name}", "line2": "{queue_count} IN QUEUE", "line3": "BOOK AT TERMINAL"}
+      {"text": "{court_name}"},
+      {"text": "{queue_count} IN QUEUE"}
     ]
   },
   "prep": {
     "interval": 10,
     "pages": [
-      {"line1": "{court_name}", "line2": "{match_info}", "line3": "GAME {timer}"},
-      {"line1": "{court_name}", "line2": "GET READY", "line3": "{queue_count} WAITING"}
+      {"text": "{match_title} {timer}"},
+      {"text": "{queue_count} WAITING"}
     ]
   },
   "game": {
     "interval": 10,
     "pages": [
-      {"line1": "{court_name}", "line2": "{match_info}", "line3": "{timer} LEFT"},
-      {"line1": "{court_name}", "line2": "{match_info}", "line3": "{queue_count} IN QUEUE"}
+      {"text": "{match_title} — {duration}"},
+      {"text": "{timer} LEFT"},
+      {"text": "{queue_count} IN QUEUE"}
     ]
   }
 }`;
@@ -63,7 +64,7 @@ export function DisplaySequenceEditor({ sequence: initial }: Props) {
     <div className="space-y-4">
       <div className="text-xs text-muted-foreground space-y-1 mb-2">
         <p>Sections: <code className="text-zinc-300">idle</code> <code className="text-zinc-300">prep</code> <code className="text-zinc-300">game</code></p>
-        <p>Variables: <code className="text-emerald-400">{'{court_name}'}</code> <code className="text-emerald-400">{'{match_info}'}</code> <code className="text-emerald-400">{'{timer}'}</code> <code className="text-emerald-400">{'{queue_count}'}</code></p>
+        <p>Variables: <code className="text-emerald-400">{'{court_name}'}</code> <code className="text-emerald-400">{'{match_title}'}</code> <code className="text-emerald-400">{'{match_type}'}</code> <code className="text-emerald-400">{'{duration}'}</code> <code className="text-emerald-400">{'{players}'}</code> <code className="text-emerald-400">{'{timer}'}</code> <code className="text-emerald-400">{'{elapsed}'}</code> <code className="text-emerald-400">{'{queue_count}'}</code> <code className="text-emerald-400">{'{next_name}'}</code> <code className="text-emerald-400">{'{next_match}'}</code></p>
         <p>Each section has <code className="text-zinc-300">interval</code> (seconds per page) and <code className="text-zinc-300">pages</code> (array of display templates). The display cycles through the pages in order.</p>
       </div>
       <textarea

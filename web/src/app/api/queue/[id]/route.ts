@@ -76,9 +76,20 @@ export async function PATCH(
     .slice(0, 2)
     .map((p: any) => `${p.members?.first_name ?? ''}`.toUpperCase())
     .join(' & ');
+  const playerStr = (game.game_players ?? [])
+    .map((p: any) => `${p.members?.first_name ?? ''} ${p.members?.last_name ?? ''}`.trim())
+    .filter((n: string) => n)
+    .join(', ');
 
   await publishDisplay(game.court_id, generatePayload(game.court_id, {
-    current: { name: players || game.match_type, startTime: new Date().toISOString(), durationMinutes: game.duration },
+    current: {
+      name: players || game.match_type,
+      startTime: new Date().toISOString(),
+      durationMinutes: game.duration,
+      matchTitle: game.match_title || '',
+      matchType: game.match_type || '',
+      players: playerStr,
+    },
     upcoming: []
   }));
 

@@ -151,8 +151,15 @@ export async function joinQueue(params: JoinQueueParams): Promise<QueueEntry> {
     await deductWallet(params.memberId, charge, game.id);
 
     // Fire-and-forget: publish board update without blocking the response
+    const matchType = params.partySize === 4 ? '2v2' : '1v1';
     publishDisplay(court.id, generatePayload(court.id, {
-      current: { name: params.matchTitle || `${params.partySize === 4 ? '2v2' : '1v1'}`, startTime: new Date().toISOString(), durationMinutes: params.duration },
+      current: {
+        name: params.matchTitle || matchType,
+        startTime: new Date().toISOString(),
+        durationMinutes: params.duration,
+        matchTitle: params.matchTitle || '',
+        matchType,
+      },
       upcoming: []
     }));
 

@@ -22,6 +22,7 @@ export async function POST(request: Request) {
     action: 'MANUAL_OVERRIDE',
     state: 'MAINTENANCE',
     schedule: { upcoming: [] },
+    serverTime: Math.floor(Date.now() / 1000),
     display: {
       pages: [{ text: `${line1} ${line2} ${line3}`.trim(), color: '#FFFFFF', effect: 'SCROLL', durationSeconds: 10 }]
     }

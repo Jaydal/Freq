@@ -31,7 +31,6 @@ typedef struct {
 typedef struct {
   char id[KIOSK_MAX_ID_LEN];
   char name[KIOSK_MAX_NAME_LEN];
-  bool active; /* true = a game is in progress/scheduled on this court */
   char match_type[8]; /* "1v1" / "2v2" */
   char match_title[KIOSK_MAX_NAME_LEN];
   time_t start_time;
@@ -41,9 +40,27 @@ typedef struct {
   uint8_t player_count;
 } court_status_t;
 
-/* Live elapsed seconds for an active court (0 if not active). */
+/* effectivePrepSec() from products-config-types.ts: no prep time under 5 min games. */
+static inline int32_t kiosk_effective_prep_sec(int32_t duration_min, int32_t configured_prep_sec) {
+  return (duration_min < 5) ? 0 : configured_prep_sec;
+}
+
+/* phaseForElapsed() from CourtStatusCard.tsx. */
+static inline court_phase_t kiosk_phase_for_elapsed(int32_t elapsed_sec, int32_t prep_time_sec) {
+  return (elapsed_sec < prep_time_sec) ? COURT_PHASE_PREPARING : COURT_PHASE_IN_GAME;
+}
+
+/* Whether a court has an active game window (schedule-derived, live every call). */
+static inline bool court_is_active(const court_status_t *c) {
+  if (c->start_time == 0) return false;
+  int32_t eff_prep = kiosk_effective_prep_sec(c->duration_min, c->prep_time_sec);
+  time_t end = c->start_time + eff_prep + c->duration_min * 60;
+  return time(NULL) < end;
+}
+
+/* Live elapsed seconds since start (0 if no game or before start). */
 static inline int32_t court_elapsed_sec(const court_status_t *c) {
-  if (!c->active) return 0;
+  if (c->start_time == 0) return 0;
   int32_t e = (int32_t)(time(NULL) - c->start_time);
   return e < 0 ? 0 : e;
 }
@@ -106,16 +123,6 @@ static inline int32_t kiosk_get_cost(const kiosk_products_config_t *cfg, int32_t
   }
   int32_t total = (rate * duration_min) / 30;
   return (party_size == 4) ? (total / 2) : total;
-}
-
-/* effectivePrepSec() from products-config-types.ts: no prep time under 5 min games. */
-static inline int32_t kiosk_effective_prep_sec(int32_t duration_min, int32_t configured_prep_sec) {
-  return (duration_min < 5) ? 0 : configured_prep_sec;
-}
-
-/* phaseForElapsed() from CourtStatusCard.tsx. */
-static inline court_phase_t kiosk_phase_for_elapsed(int32_t elapsed_sec, int32_t prep_time_sec) {
-  return (elapsed_sec < prep_time_sec) ? COURT_PHASE_PREPARING : COURT_PHASE_IN_GAME;
 }
 
 /* Result of joining the queue (mirrors the 'success' step's two variants). */

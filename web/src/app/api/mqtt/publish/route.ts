@@ -1,12 +1,17 @@
 import { NextResponse } from 'next/server';
-import { publishDisplay } from '@/lib/mqtt';
+import { publishDisplay, DisplayPayload } from '@/lib/mqtt';
 import { z } from 'zod';
 
 const schema = z.object({
   courtId: z.string(),
-  line1: z.string().max(16).default(''),
-  line2: z.string().max(16).default(''),
-  line3: z.string().max(16).default(''),
+  state: z.enum(['OPEN', 'PLAYING', 'MAINTENANCE']).default('MAINTENANCE'),
+  text: z.string().optional(),
+  pages: z.array(z.object({
+    text: z.string(),
+    color: z.string().optional(),
+    effect: z.enum(['SCROLL', 'STATIC', 'BLINK']).optional(),
+    durationSeconds: z.number().optional(),
+  })).optional(),
 });
 
 export async function POST(request: Request) {
@@ -16,15 +21,19 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid payload', details: result.error.flatten() }, { status: 400 });
   }
 
-  const ok = await publishDisplay(result.data.courtId, {
+  const pages = result.data.pages ?? (result.data.text
+    ? [{ text: result.data.text, color: '#FFFFFF', effect: 'SCROLL' as const, durationSeconds: 10 }]
+    : [{ text: `${result.data.courtId}`, color: '#FFFFFF', effect: 'SCROLL' as const, durationSeconds: 10 }]);
+
+  const payload: DisplayPayload = {
     courtId: result.data.courtId,
     action: 'MANUAL_OVERRIDE',
-    state: 'MAINTENANCE',
+    state: result.data.state,
     schedule: { upcoming: [] },
-    display: {
-      pages: [{ text: `${result.data.line1} ${result.data.line2} ${result.data.line3}`.trim(), color: '#FFFFFF', effect: 'SCROLL', durationSeconds: 10 }]
-    }
-  });
+    serverTime: Math.floor(Date.now() / 1000),
+    display: { pages },
+  };
 
+  const ok = await publishDisplay(result.data.courtId, payload);
   return NextResponse.json({ published: ok });
 }

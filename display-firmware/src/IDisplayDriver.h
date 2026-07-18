@@ -11,6 +11,7 @@ public:
   virtual void setColorRGB(uint8_t /*r*/, uint8_t /*g*/, uint8_t /*b*/) {}
   virtual void setScrollSpeed(uint16_t /*msPerPixel*/) {}
   virtual void setAnimationMode(const char* /*mode*/) {}
+  virtual void setTimer(unsigned long /*remainingMs*/, unsigned long /*totalMs*/, unsigned long /*baseMs*/) {}
   virtual void runDiagnosticSequence() {}
   virtual ~IDisplayDriver() = default;
 };

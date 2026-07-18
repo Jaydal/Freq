@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo, type ReactNode } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import mqtt from 'mqtt';
 import { TerminalLayout } from './TerminalLayout';
 import { CourtOverview } from './CourtOverview';
 import { IdleScreen } from './IdleScreen';
@@ -174,20 +175,36 @@ export function TerminalKiosk() {
       if (!cancelled) await fetchCourts();
     };
     run();
-    const es = new EventSource('/api/queue/events');
-    es.onmessage = () => { if (!cancelled) fetchCourts(); };
-    es.onerror = () => es.close();
-    const realtime = supabase.channel('kiosk-processor');
-    realtime.on('postgres_changes',
-      { event: '*', schema: 'public', table: 'games' },
-      () => { if (!cancelled) { fetchCourts(); } }
-    );
-    realtime.on('postgres_changes',
-      { event: '*', schema: 'public', table: 'courts' },
-      () => { if (!cancelled) { fetchCourts(); } }
-    );
-    realtime.subscribe();
-    return () => { cancelled = true; es.close(); supabase.removeChannel(realtime); };
+    let mqttClient: mqtt.MqttClient | null = null;
+    fetch('/api/board/config').then(r => r.json()).then(cfg => {
+      if (!cfg.enabled || cancelled) return;
+      mqttClient = mqtt.connect(cfg.url, {
+        username: cfg.username, password: cfg.password,
+        clientId: `freq-kiosk-web-${crypto.randomUUID().slice(0, 8)}`,
+        reconnectPeriod: 5000,
+      });
+      mqttClient.on('connect', () => mqttClient!.subscribe(cfg.topic));
+      mqttClient.on('message', (_topic, payload) => {
+        if (cancelled) return;
+        try {
+          const snap = JSON.parse(payload.toString());
+          const now = Date.now() / 1000;
+          const busyIds = new Set<string>();
+          for (const c of snap.courts ?? []) {
+            if (!c.startTime) continue;
+            const prep = (c.durationMin ?? 0) < 5 ? 0 : (c.prepTimeSec ?? 0);
+            const end = c.startTime + prep + (c.durationMin ?? 0) * 60;
+            if (now < end) busyIds.add(c.id);
+          }
+          setCourts(snap.courts.map((c: any) => ({
+            id: c.id, name: c.name,
+            status: busyIds.has(c.id) ? 'Playing' : 'Available',
+          })));
+        } catch {}
+      });
+    }).catch(() => {});
+    const poller = setInterval(() => { if (!cancelled) fetchCourts(); }, 30_000);
+    return () => { cancelled = true; clearInterval(poller); if (mqttClient) mqttClient.end(true); };
   }, []);
 
   async function fetchInitial() {
@@ -229,7 +246,8 @@ export function TerminalKiosk() {
   async function fetchCourts() {
     const { data: games } = await supabase
       .from('games')
-      .select('id, court_id, duration, status, start_time');
+      .select('id, court_id, duration, status, start_time')
+      .in('status', ['In Progress', 'Scheduled']);
     const { data: allCourts } = await supabase
       .from('courts')
       .select('*')

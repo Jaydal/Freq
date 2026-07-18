@@ -67,7 +67,7 @@ export async function POST(request: Request) {
     const payload = generatePayload(court.id, {
       current: { name: matchType, startTime: new Date().toISOString(), durationMinutes: duration },
       upcoming: []
-    });
+    }, { courtName: court.name });
     publishDisplay(court.id, payload).catch(() => {});
   }
 

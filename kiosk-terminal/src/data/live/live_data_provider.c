@@ -43,7 +43,7 @@ static void get_court_options(court_option_t *out, uint8_t *count) {
       memset(o, 0, sizeof(*o));
       snprintf(o->id, sizeof(o->id), "%s", c->id);
       snprintf(o->name, sizeof(o->name), "%s", c->name);
-      snprintf(o->status, sizeof(o->status), "%s", c->active ? "Playing" : "Available");
+      snprintf(o->status, sizeof(o->status), "%s", court_is_active(c) ? "Playing" : "Available");
     }
   }
   *count = n;

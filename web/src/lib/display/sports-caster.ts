@@ -6,71 +6,100 @@ export interface ScheduleData {
     name: string;
     startTime: string;
     durationMinutes: number;
+    matchTitle?: string;
+    matchType?: string;
+    players?: string;
   } | null;
   upcoming: { name: string }[];
 }
 
-export function generatePayload(courtId: string, schedule: ScheduleData): DisplayPayload {
+export interface DisplaySequenceSection {
+  interval: number;
+  pages: { text?: string; line1?: string; color?: string; effect?: string; durationSeconds?: number }[];
+}
+
+export interface DisplaySequenceConfig {
+  idle: DisplaySequenceSection;
+  prep: DisplaySequenceSection;
+  game: DisplaySequenceSection;
+}
+
+const DEFAULT_SEQUENCE: DisplaySequenceConfig = {
+  idle: { interval: 10, pages: [{ text: "{court_name}" }, { text: "{queue_count} IN QUEUE" }] },
+  prep: { interval: 10, pages: [{ text: "{match_title}" }, { text: "{timer}" }] },
+  game: { interval: 10, pages: [{ text: "{match_title}" }, { text: "{timer} LEFT" }, { text: "{queue_count} IN QUEUE" }] },
+};
+
+function substituteVars(text: string, vars: Record<string, string>): string {
+  let result = text;
+  for (const [key, val] of Object.entries(vars)) {
+    result = result.replaceAll(`{${key}}`, val);
+  }
+  return result;
+}
+
+export function generatePayload(
+  courtId: string,
+  schedule: ScheduleData,
+  opts?: {
+    courtName?: string;
+    queueCount?: number;
+    displaySequence?: DisplaySequenceConfig;
+    prepTimeSec?: number;
+    nextName?: string;
+    nextMatch?: string;
+  }
+): DisplayPayload {
+  const nowMs = Date.now();
+  const serverTime = Math.floor(nowMs / 1000);
+  const prepTimeSec = opts?.prepTimeSec ?? 300;
+  const courtName = opts?.courtName ?? courtId;
+  const queueCount = opts?.queueCount ?? 0;
+  const sequence = opts?.displaySequence ?? DEFAULT_SEQUENCE;
+
   const pages: DisplayPage[] = [];
   let state: 'OPEN' | 'PLAYING' | 'MAINTENANCE' = 'OPEN';
 
-  const courtNumStr = courtId.startsWith('court-') ? courtId.replace('court-', '').toUpperCase() : courtId.slice(-4).toUpperCase();
-
+  let section: DisplaySequenceSection | null = null;
   if (schedule.maintenance) {
     state = 'MAINTENANCE';
+    section = null;
     pages.push({
-      text: `COURT ${courtNumStr} CLOSED FOR MAINTENANCE`,
+      text: `${courtName} CLOSED FOR MAINTENANCE`,
       color: "#FF0000",
       effect: "SCROLL",
       durationSeconds: 10
     });
   } else if (!schedule.current) {
     state = 'OPEN';
-    pages.push({
-      text: `COURT ${courtNumStr} AVAILABLE`,
-      color: "#00FF00",
-      effect: "SCROLL",
-      durationSeconds: 10
-    });
-    pages.push({
-      text: "SCAN KIOSK TO PLAY",
-      color: "#FFFFFF",
-      effect: "SCROLL",
-      durationSeconds: 5
-    });
+    section = sequence.idle;
   } else {
     state = 'PLAYING';
-    pages.push({
-      text: `PLAYING: ${schedule.current.name}`,
-      color: "#00FFFF", // CYAN
-      effect: "SCROLL",
-      durationSeconds: 10
-    });
+    section = sequence.game;
+  }
 
-    if (schedule.upcoming.length === 0) {
+  const c = schedule.current;
+  const subVars: Record<string, string> = {
+    court_name: courtName,
+    match_info: c?.name ?? '',
+    match_title: c?.matchTitle ?? c?.name ?? '',
+    match_type: c?.matchType ?? '',
+    duration: c ? `${c.durationMinutes}min` : '',
+    players: c?.players ?? '',
+    queue_count: String(queueCount),
+    next_name: opts?.nextName ?? '',
+    next_match: opts?.nextMatch ?? '',
+  };
+
+  if (section) {
+    for (const tpl of section.pages) {
+      const raw = tpl.text ?? tpl.line1 ?? '';
+      const text = substituteVars(raw, subVars);
       pages.push({
-        text: "COURT OPEN AFTER THIS GAME",
-        color: "#00FF00",
-        effect: "SCROLL",
-        durationSeconds: 5
-      });
-    } else {
-      schedule.upcoming.forEach((game, index) => {
-        if (index === 0) {
-          pages.push({
-            text: `UP NEXT: ${game.name}`,
-            color: "#FFFF00", // YELLOW
-            effect: "SCROLL",
-            durationSeconds: 8
-          });
-        } else if (index === 1) {
-          pages.push({
-            text: `2ND IN LINE: ${game.name}`,
-            color: "#FFA500", // ORANGE
-            effect: "SCROLL",
-            durationSeconds: 5
-          });
-        }
+        text,
+        color: tpl.color ?? (state === 'PLAYING' ? '#00FFFF' : '#00FF00'),
+        effect: (tpl.effect ?? 'SCROLL') as 'SCROLL' | 'STATIC' | 'BLINK',
+        durationSeconds: tpl.durationSeconds ?? section.interval,
       });
     }
   }
@@ -82,9 +111,10 @@ export function generatePayload(courtId: string, schedule: ScheduleData): Displa
           startTime: schedule.current.startTime,
           startTimeEpoch: (() => {
             const t = Math.floor(new Date(schedule.current.startTime).getTime() / 1000);
-            return isNaN(t) ? Math.floor(Date.now() / 1000) : t;
+            return isNaN(t) ? serverTime : t;
           })(),
           durationMinutes: schedule.current.durationMinutes,
+          prepTimeSec,
         }
       : null,
     upcoming: schedule.upcoming,
@@ -95,6 +125,7 @@ export function generatePayload(courtId: string, schedule: ScheduleData): Displa
     action: 'QUEUE_UPDATE',
     state,
     schedule: mappedSchedule,
+    serverTime,
     display: {
       pages
     }

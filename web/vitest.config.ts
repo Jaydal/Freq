@@ -11,5 +11,8 @@ export default defineConfig({
       reporter: ['text', 'lcov'],
       include: ['src/lib/**', 'src/app/api/**'],
     },
+    env: {
+      INTERNAL_API_KEY: 'test-api-key',
+    },
   },
 })

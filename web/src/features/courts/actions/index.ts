@@ -2,6 +2,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import { publishBoardOnce } from '@/lib/queue/board-publisher';
+import { processCourtQueue } from '@/lib/queue/queue-processor';
 import { publishDisplay } from '@/lib/mqtt';
 import { generatePayload } from '@/lib/display/sports-caster';
 
@@ -67,6 +68,7 @@ export async function endGame(gameId: string, courtId: string, refund: boolean =
   }
 
   await publishDisplay(courtId, generatePayload(courtId, { current: null, upcoming: [] }));
+  await processCourtQueue(courtId);
   publishBoardOnce().catch(() => {});
   revalidatePath('/courts');
 }
@@ -133,6 +135,8 @@ export async function requeueGame(gameId: string, courtId: string, position: num
     .from('games')
     .update({ status: 'Completed', end_time: now })
     .eq('id', gameId);
+
+  await processCourtQueue(courtId);
 
   const { data: allWaiting } = await supabase
     .from('queue_entries')

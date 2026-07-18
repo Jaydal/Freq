@@ -21,9 +21,10 @@ export interface DisplayPayload {
   action?: string;
   state: 'OPEN' | 'PLAYING' | 'MAINTENANCE';
   schedule: {
-    current?: { name: string; startTime: string; startTimeEpoch?: number; durationMinutes: number } | null;
+    current?: { name: string; startTime: string; startTimeEpoch?: number; durationMinutes: number; prepTimeSec?: number } | null;
     upcoming: { name: string }[];
   };
+  serverTime: number;
   display: {
     pages: DisplayPage[];
   };

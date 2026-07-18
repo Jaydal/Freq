@@ -18,11 +18,6 @@ static double get_num(const cJSON *obj, const char *key) {
   return cJSON_IsNumber(item) ? item->valuedouble : 0;
 }
 
-static bool get_bool(const cJSON *obj, const char *key) {
-  const cJSON *item = cJSON_GetObjectItemCaseSensitive(obj, key);
-  return cJSON_IsBool(item) ? cJSON_IsTrue(item) : false;
-}
-
 bool board_parse(const char *json, size_t len, kiosk_board_t *out) {
   memset(out, 0, sizeof(*out));
   cJSON *root = cJSON_ParseWithLength(json, len);
@@ -56,7 +51,6 @@ bool board_parse(const char *json, size_t len, kiosk_board_t *out) {
       court_status_t *dst = &out->courts[out->court_count++];
       get_str(c, "id", dst->id, sizeof(dst->id));
       get_str(c, "name", dst->name, sizeof(dst->name));
-      dst->active = get_bool(c, "active");
       get_str(c, "matchType", dst->match_type, sizeof(dst->match_type));
       get_str(c, "matchTitle", dst->match_title, sizeof(dst->match_title));
       dst->start_time = (time_t)get_num(c, "startTime");
