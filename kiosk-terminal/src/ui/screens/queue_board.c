@@ -64,6 +64,12 @@ lv_obj_t *queue_board_create(lv_obj_t *parent, const kiosk_board_t *board,
   lv_obj_set_style_text_font(nfc_status, &lv_font_montserrat_14, 0);
   lv_obj_align(nfc_status, LV_ALIGN_TOP_RIGHT, 0, 0);
 
+  lv_obj_t *brand = lv_label_create(root);
+  lv_label_set_text(brand, "Paddle Point Queueing Terminal");
+  lv_obj_set_style_text_font(brand, &lv_font_montserrat_16, 0);
+  lv_obj_set_style_text_color(brand, KIOSK_COLOR_EMERALD_400, 0);
+  lv_obj_align(brand, LV_ALIGN_TOP_LEFT, 0, 0);
+
   lv_obj_t *columns = lv_obj_create(root);
   lv_obj_remove_style_all(columns);
   lv_obj_set_size(columns, lv_pct(100), lv_pct(100));
