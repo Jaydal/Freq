@@ -15,7 +15,18 @@ export interface ScheduleData {
 
 export interface DisplaySequenceSection {
   interval: number;
-  pages: { text?: string; line1?: string; color?: string; effect?: string; durationSeconds?: number }[];
+  pages: {
+    text?: string;
+    line1?: string;
+    color?: string;
+    effect?: string;
+    durationSeconds?: number;
+    zones?: {
+      panelStart: number;
+      panelEnd: number;
+      lines: { text: string; color: string; effect: string }[];
+    }[];
+  }[];
 }
 
 export interface DisplaySequenceConfig {
@@ -82,7 +93,7 @@ export function generatePayload(
   const subVars: Record<string, string> = {
     court_name: courtName,
     match_info: c?.name ?? '',
-    match_title: c?.matchTitle ?? c?.name ?? '',
+    match_title: c?.matchTitle || c?.name || 'IN GAME',
     match_type: c?.matchType ?? '',
     duration: c ? `${c.durationMinutes}min` : '',
     players: c?.players ?? '',
@@ -91,16 +102,34 @@ export function generatePayload(
     next_match: opts?.nextMatch ?? '',
   };
 
+  const defaultColor = state === 'PLAYING' ? '#00FFFF' : '#00FF00';
+
   if (section) {
     for (const tpl of section.pages) {
-      const raw = tpl.text ?? tpl.line1 ?? '';
-      const text = substituteVars(raw, subVars);
-      pages.push({
-        text,
-        color: tpl.color ?? (state === 'PLAYING' ? '#00FFFF' : '#00FF00'),
-        effect: (tpl.effect ?? 'SCROLL') as 'SCROLL' | 'STATIC' | 'BLINK',
-        durationSeconds: tpl.durationSeconds ?? section.interval,
-      });
+      if (tpl.zones) {
+        const mappedZones = tpl.zones.map(zone => ({
+          panelStart: zone.panelStart,
+          panelEnd: zone.panelEnd,
+          lines: zone.lines.map(line => ({
+            text: substituteVars(line.text, subVars),
+            color: line.color || defaultColor,
+            effect: line.effect || 'SCROLL',
+          })),
+        }));
+        pages.push({
+          zones: mappedZones,
+          durationSeconds: tpl.durationSeconds ?? section.interval,
+        });
+      } else {
+        const raw = tpl.text ?? tpl.line1 ?? '';
+        const text = substituteVars(raw, subVars);
+        pages.push({
+          text,
+          color: tpl.color ?? defaultColor,
+          effect: (tpl.effect ?? 'SCROLL') as 'SCROLL' | 'STATIC' | 'BLINK' | 'paginate',
+          durationSeconds: tpl.durationSeconds ?? section.interval,
+        });
+      }
     }
   }
 

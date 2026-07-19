@@ -10,10 +10,15 @@ type CourtStatus = {
 };
 
 export interface DisplayPage {
-  text: string;
-  color?: string; // Hex string e.g. "#00FF00"
-  effect?: 'SCROLL' | 'STATIC' | 'BLINK';
+  text?: string;
+  color?: string;
+  effect?: 'SCROLL' | 'STATIC' | 'BLINK' | 'paginate';
   durationSeconds?: number;
+  zones?: {
+    panelStart: number;
+    panelEnd: number;
+    lines: { text: string; color: string; effect: string }[];
+  }[];
 }
 
 export interface DisplayPayload {
