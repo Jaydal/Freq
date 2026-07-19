@@ -67,6 +67,8 @@ private:
   size_t _currentPageIndex = 0;
   unsigned long _lastPageChangeTime = 0;
 
+  void applyCurrentPage();
+
   static MqttDisplayClient* _instance;
   static void onMessage(char* topic, uint8_t* payload, unsigned int len);
   void        handleMessage(uint8_t* payload, unsigned int len);

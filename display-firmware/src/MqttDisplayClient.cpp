@@ -1,9 +1,7 @@
-#ifdef USE_HUB75  // compiled for both Wokwi simulation and production
+#ifdef USE_HUB75
 #include "MqttDisplayClient.h"
 #include <ArduinoJson.h>
 
-// W9: This singleton pattern is safe in the single-threaded Arduino model where callbacks
-// fire from _mqtt.loop() in the main task. If migrated to FreeRTOS tasks, a mutex is required.
 MqttDisplayClient* MqttDisplayClient::_instance = nullptr;
 
 static bool parseHexColor(const std::string& hex, uint8_t& r, uint8_t& g, uint8_t& b) {
@@ -19,10 +17,8 @@ static bool parseHexColor(const std::string& hex, uint8_t& r, uint8_t& g, uint8_
 
 MqttDisplayClient::MqttDisplayClient(IDisplayDriver& driver)
   : _driver(driver), _mqtt(_wifi),
-    _lastWifiReconnect(0), _lastMqttReconnect(0), _wasOnline(false)
+    _lastWifiReconnect(0), _lastMqttReconnect(0), _lastHeartbeat(0), _wasOnline(false)
 {}
-
-// ── Public ────────────────────────────────────────────────────────────────────
 
 void MqttDisplayClient::begin(const char* ssid, const char* password,
                                const char* broker, uint16_t port,
@@ -32,8 +28,8 @@ void MqttDisplayClient::begin(const char* ssid, const char* password,
   _mqttUser = mqttUser ? mqttUser : "";
   _mqttPass = mqttPass ? mqttPass : "";
   _instance = this;
-  
-  const char* ca_cert = 
+
+  const char* ca_cert =
 "-----BEGIN CERTIFICATE-----\n"
 "MIIFazCCA1OgAwIBAgIRAIIQz7DSQONZRGPgu2OCiwAwDQYJKoZIhvcNAQELBQAw\n"
 "TzELMAkGA1UEBhMCVVMxKTAnBgNVBAoTIEludGVybmV0IFNlY3VyaXR5IFJlc2Vh\n"
@@ -56,14 +52,14 @@ void MqttDisplayClient::begin(const char* ssid, const char* password,
 "hkiG9w0BAQsFAAOCAgEAVR9YqbyyqFDQDLHYGmkgJykIrGF1XIpu+ILlaS/V9lZL\n"
 "ubhzEFnTIZd+50xx+7LSYK05qAvqFyFWhfFQDlnrzuBZ6brJFe+GnY+EgPbk6ZGQ\n"
 "3BebYhtF8GaV0nxvwuo77x/Py9auJ/GpsMiu/X1+mvoiBOv/2X/qkSsisRcOj/KK\n"
-"NFtY2PwByVS5uCbMiogZiUvsY0lfKafkbNYISfI3YFkYctRG6sMnLnBI86FYWi7l\n"
-"cAcid2aBGi0zPsETAt4M+FkGHOlluMBMxfGIhjDFSeVIOXGY4EC+jGnbFO4xsrBE\n"
-"lNxCMcPJ0UVBMmJG0BACBfNv/eHH/K6P0xoAbd7chgiHMwEQi6Y1k5sCP8yB2BOf\n"
-"xQ3yYFfAdBV/cRKc0eajEGJ9eJNA3c0Sr/7kTl5GmqYQ55yzrp80oqGBmzQkQPB6\n"
-"LcSG7T0v6fQ7m4Y2spE/ctkO07cSGMqqe8qfPPlF7Jvjaw3kEP0I1YXKuJPmCyq5\n"
-"K/VJJwUHG47SkBkvIeWUqXTIy1Yxt/GhL+JDVTjDGp7UxHKWaRqnu/+F4vLjEFa0\n"
-"cXnGpkXd9qD1Ovy3QCNWNsQiRYB9laW0n8Z8u5tH0gto7KW3cXr78GXBDSJ8JLTn\n"
-"PsJNvPkVZFGq1bU/K+2hXIi/SheXvwsSTn8YGCGhO0Lr1NMstej3E0mcIGQ=\n"
+"NFtY2PwByVS5uCbMiogziUwthDyC3+6WVwW6LLv3xLfHTjuCvjHIInNzktHCgKQ5\n"
+"ORAzI4JMPJ+GslWYHb4phowim57iaztXOoJwTdwJx4nLCgdNbOhdjsnvzqvHu7Ur\n"
+"TkXWStAmzOVyyghqpZXjFaH3pO3JLF+l+/+sKAIuvtd7u+Nxe5AW0wdeRlN8NwdC\n"
+"jNPElpzVmbUq4JUagEiuTDkHzsxHpFKVK7q4+63SM1N95R1NbdWhscdCb+ZAJzVc\n"
+"oyi3B43njTOQ5yOf+1CceWxG1bQVs5ZufpsMljq4Ui0/1lvh+wjChP4kqKOJ2qxq\n"
+"4RgqsahDYVvTH9w7jXbyLeiNdd8XM2w9U/t7y0Ff/9yi0GE44Za4rF2LN9d11TPA\n"
+"mRGunUHBcnWEvgJBQl9nJEiU0Zsnvgc/ubhPgXRR4Xq37Z0j4r7g1SgEEzwxA57d\n"
+"emyPxgcYxn/eR44/KJ4EBs+lVDR3veyJm+kXQ99b21/+jh5Xos1AnX5iItreGCc=\n"
 "-----END CERTIFICATE-----\n";
   _wifi.setCACert(ca_cert);
 
@@ -113,6 +109,14 @@ void MqttDisplayClient::update() {
 
   _mqtt.loop();
 
+  if (online) {
+    unsigned long now = millis();
+    if (now - _lastHeartbeat > 60000) {
+      _lastHeartbeat = now;
+      publishOnline();
+    }
+  }
+
   if (!_playlist.empty() && _wasOnline) {
     unsigned long now = millis();
     unsigned long durationMs = (unsigned long)_playlist[_currentPageIndex].durationSeconds * 1000;
@@ -121,15 +125,8 @@ void MqttDisplayClient::update() {
     if (now - _lastPageChangeTime >= durationMs) {
       _lastPageChangeTime = now;
       _currentPageIndex = (_currentPageIndex + 1) % _playlist.size();
-      
-      const auto& page = _playlist[_currentPageIndex];
-      _driver.showRow(0, page.text.c_str());
-      
-      uint8_t r, g, b;
-      if (parseHexColor(page.color, r, g, b)) {
-        _driver.setColorRGB(r, g, b);
-      }
-      _driver.setAnimationMode(page.effect.c_str());
+
+      applyCurrentPage();
     }
   }
 
@@ -137,6 +134,35 @@ void MqttDisplayClient::update() {
 }
 
 // ── Private ───────────────────────────────────────────────────────────────────
+
+void MqttDisplayClient::applyCurrentPage() {
+  if (_currentPageIndex >= _playlist.size()) return;
+
+  const auto& page = _playlist[_currentPageIndex];
+
+  if (page.zoneCount == 0) return;
+
+  ZoneRenderInfo rz[3];
+  for (int zi = 0; zi < page.zoneCount && zi < 3; zi++) {
+    rz[zi].panelStart = page.zones[zi].panelStart;
+    rz[zi].panelEnd = page.zones[zi].panelEnd;
+    rz[zi].lineCount = page.zones[zi].lineCount;
+
+    for (int li = 0; li < page.zones[zi].lineCount && li < 2; li++) {
+      const auto& srcLine = page.zones[zi].lines[li];
+      rz[zi].lines[li].text = srcLine.text.c_str();
+      uint8_t r = 0, g = 255, b = 0;
+      parseHexColor(srcLine.color, r, g, b);
+      rz[zi].lines[li].r = r;
+      rz[zi].lines[li].g = g;
+      rz[zi].lines[li].b = b;
+      rz[zi].lines[li].effect = srcLine.effect.c_str();
+    }
+  }
+
+  _driver.setZones(rz, page.zoneCount);
+}
+
 void MqttDisplayClient::connectWiFi() {
   if (WiFi.status() == WL_CONNECTED) {
     log_i("[health] WiFi already connected. IP=%s  RSSI=%d dBm",
@@ -154,7 +180,6 @@ void MqttDisplayClient::connectWiFi() {
       _driver.update();
       lastUpdate = millis();
     }
-    // W4: ESP32 core feeds the Task WDT during yield()
     yield();
   }
 
@@ -180,9 +205,10 @@ bool MqttDisplayClient::connectMqtt() {
   String clientId = "freq-led-" + String(ESP.getEfuseMac(), HEX);
 
   if (_mqtt.connect(clientId.c_str(), _mqttUser.c_str(), _mqttPass.c_str(),
-                    _statusTopic, 1, /*retain=*/true, "{\"status\":\"offline\"}")) {
+                    _statusTopic, 1, true, "{\"status\":\"offline\"}")) {
     log_i("[health] MQTT OK");
     _mqtt.subscribe(_displayTopic, 1);
+    log_i("[health] Subscribed to %s (retained msg will follow)", _displayTopic);
     publishOnline();
     _driver.showRow(0, "READY - WAITING FOR QUEUE...");
     _driver.update();
@@ -197,12 +223,12 @@ bool MqttDisplayClient::connectMqtt() {
 
 void MqttDisplayClient::publishOnline() {
   char payload[192];
-  snprintf(payload, sizeof(payload), 
+  snprintf(payload, sizeof(payload),
            "{\"status\":\"online\",\"ip\":\"%s\",\"rssi\":%d,\"court\":\"%s\",\"sim\":false}",
            WiFi.localIP().toString().c_str(), WiFi.RSSI(), _courtId.c_str());
-           
+
   log_i("[mqtt] Publishing online status");
-  _mqtt.publish(_statusTopic, (uint8_t*)payload, strlen(payload), /*retain=*/true);
+  _mqtt.publish(_statusTopic, (uint8_t*)payload, strlen(payload), true);
 }
 
 // ── Static MQTT callback ──────────────────────────────────────────────────────
@@ -237,36 +263,74 @@ void MqttDisplayClient::handleMessage(uint8_t* payload, unsigned int len) {
     }
     if (strlen(msg) > 0) {
       DisplayPage p;
-      p.text = msg;
-      p.color = doc["color"] | "#FFFFFF";
-      p.effect = doc["animation"] | "SCROLL";
       p.durationSeconds = 10;
+      p.zoneCount = 1;
+      p.zones[0].panelStart = 0;
+      p.zones[0].panelEnd = 2;
+      p.zones[0].lineCount = 1;
+      p.zones[0].lines[0].text = msg;
+      p.zones[0].lines[0].color = doc["color"] | "#FFFFFF";
+      p.zones[0].lines[0].effect = doc["animation"] | "SCROLL";
       _playlist.push_back(p);
     }
   } else {
     for (JsonObject page : pages) {
       DisplayPage p;
-      p.text = page["text"] | "";
-      p.color = page["color"] | "#FFFFFF";
-      p.effect = page["effect"] | "SCROLL";
       p.durationSeconds = page["durationSeconds"] | 10;
+
+      JsonArray zones = page["zones"];
+      if (!zones.isNull()) {
+        p.zoneCount = 0;
+        for (JsonObject zone : zones) {
+          if (p.zoneCount >= 3) break;
+          DisplayZone& z = p.zones[p.zoneCount];
+          z.panelStart = zone["panelStart"] | 0;
+          z.panelEnd = zone["panelEnd"] | 2;
+          z.lineCount = 0;
+
+          JsonArray lines = zone["lines"];
+          if (!lines.isNull()) {
+            for (JsonObject line : lines) {
+              if (z.lineCount >= 2) break;
+              z.lines[z.lineCount].text = line["text"] | "";
+              z.lines[z.lineCount].color = line["color"] | "#FFFFFF";
+              z.lines[z.lineCount].effect = line["effect"] | "SCROLL";
+              z.lineCount++;
+            }
+          }
+          p.zoneCount++;
+        }
+      } else {
+        // Legacy flat page -> single zone
+        DisplayZone& z = p.zones[0];
+        z.panelStart = 0;
+        z.panelEnd = 2;
+        z.lineCount = 1;
+        z.lines[0].text = page["text"] | "";
+        z.lines[0].color = page["color"] | "#FFFFFF";
+        z.lines[0].effect = page["effect"] | "SCROLL";
+        p.zoneCount = 1;
+      }
+
       _playlist.push_back(p);
     }
   }
 
-  // Parse schedule data for live {timer} countdown substitution
+  // Parse schedule data for live {timer} countdown
   JsonObject currentSchedule = doc["schedule"]["current"];
   if (!currentSchedule.isNull()) {
     long startTimeEpoch = currentSchedule["startTimeEpoch"] | 0;
     long durationMinutes = currentSchedule["durationMinutes"] | 0;
     long prepTimeSec = currentSchedule["prepTimeSec"] | 0;
     long serverTime = doc["serverTime"] | 0;
+    log_i("[mqtt] schedule: startEpoch=%ld duration=%ldmin prep=%lds serverTime=%ld", startTimeEpoch, durationMinutes, prepTimeSec, serverTime);
     if (startTimeEpoch > 0 && serverTime > 0) {
       long endTimeEpoch = startTimeEpoch + prepTimeSec + durationMinutes * 60;
       long remainingSec = endTimeEpoch - serverTime;
       if (remainingSec < 0) remainingSec = 0;
       unsigned long remainingMs = (unsigned long)remainingSec * 1000;
       unsigned long totalMs = ((unsigned long)durationMinutes * 60 + (unsigned long)prepTimeSec) * 1000;
+      log_i("[mqtt] timer set: remaining=%lds total=%lds", remainingSec, totalMs / 1000);
       _driver.setTimer(remainingMs, totalMs, millis());
     }
   }
@@ -274,19 +338,7 @@ void MqttDisplayClient::handleMessage(uint8_t* payload, unsigned int len) {
   _currentPageIndex = 0;
   _lastPageChangeTime = millis();
 
-  if (!_playlist.empty()) {
-    const auto& page = _playlist[0];
-    log_i("[display] MSG: %s", page.text.c_str());
-    _driver.showRow(0, page.text.c_str());
-    uint8_t r, g, b;
-    if (parseHexColor(page.color, r, g, b)) {
-      _driver.setColorRGB(r, g, b);
-    }
-    _driver.setAnimationMode(page.effect.c_str());
-  } else {
-    _driver.showRow(0, "");
-  }
-
+  applyCurrentPage();
   _driver.update();
 }
 
