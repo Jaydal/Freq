@@ -3,7 +3,6 @@
 
 #include "IDisplayDriver.h"
 #include <ESP32-HUB75-MatrixPanel-I2S-DMA.h>
-#include <vector>
 
 class Hub75Driver : public IDisplayDriver {
 public:
@@ -17,28 +16,41 @@ public:
   void setScrollSpeed(uint16_t msPerPixel) override;
   void setAnimationMode(const char* mode) override;
   void setTimer(unsigned long remainingMs, unsigned long totalMs, unsigned long baseMs) { _timerRemainingAtBaseMs = remainingMs; _timerTotalMs = totalMs; _timerBaseMs = baseMs; }
+  void setZones(const ZoneRenderInfo* zones, uint8_t count) override;
   void runDiagnosticSequence() override;
 
 private:
   MatrixPanel_I2S_DMA* _matrix;
-  String _lines[1];          // Only 1 line rendered now (scaled to fit)
-  int    _scrollX[1];         // current x offset for marquee
-  unsigned long _scrollLastTick[1];
-  uint16_t _color;
+  uint16_t _defaultColor;
   uint16_t _scrollTickMs;
   String _animMode;
 
-  struct Page {
-    String text1;
-    String text2;
-    int scale;
-  };
-  std::vector<Page> _pages;
-  int _currentPage;
-  unsigned long _pageLastTick;
+  static const int MAX_ZONES = 3;
+  static const int MAX_LINES_PER_ZONE = 2;
 
-  // Timer countdown — set by MqttDisplayClient via setTimer().
-  // On each redraw, {timer} in the line text is substituted with M:SS.
+  struct ZoneState {
+    uint8_t panelStart;
+    uint8_t panelEnd;
+    uint8_t lineCount;
+    struct LineState {
+      String text;
+      uint16_t color;
+      String effect;
+      int scrollX;
+      unsigned long scrollLastTick;
+    } lines[MAX_LINES_PER_ZONE];
+    bool hasData;
+  };
+
+  ZoneState _zones[MAX_ZONES];
+  int _zoneCount;
+
+  // Fallback single-line state (when showRow is used directly)
+  String _fallbackText;
+  int _fallbackScrollX;
+  unsigned long _fallbackScrollTick;
+
+  // Timer countdown
   unsigned long _timerRemainingAtBaseMs = 0;
   unsigned long _timerTotalMs = 0;
   unsigned long _timerBaseMs = 0;
@@ -46,7 +58,7 @@ private:
 
   String substituteTimer(const String& text) const;
   void redraw();
-  void drawText5x7Scaled(const char* s, int x, int y, uint16_t color, int scale);
+  void drawText5x7Scaled(const char* s, int x, int y, uint16_t color, int scale, int clipXStart, int clipXEnd);
   int  textWidth5x7Scaled(const char* s, int scale);
   void drawPixelMapped(int x, int y, uint16_t color);
   void paginateText(const String& text);

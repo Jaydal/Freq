@@ -1,6 +1,5 @@
 #pragma once
-// W3: TODO — Refactor to use either String or std::string consistently to reduce heap fragmentation
-#ifdef USE_HUB75  // compiled for both Wokwi simulation and production
+#ifdef USE_HUB75
 
 #include "IDisplayDriver.h"
 #include <WiFi.h>
@@ -9,10 +8,22 @@
 #include <vector>
 #include <string>
 
-struct DisplayPage {
+struct ZoneLine {
   std::string text;
   std::string color;
   std::string effect;
+};
+
+struct DisplayZone {
+  uint8_t panelStart;
+  uint8_t panelEnd;
+  ZoneLine lines[2];
+  uint8_t lineCount;
+};
+
+struct DisplayPage {
+  DisplayZone zones[3];
+  uint8_t zoneCount;
   uint16_t durationSeconds;
 };
 
@@ -45,6 +56,7 @@ private:
   char          _statusTopic[80];
   unsigned long _lastWifiReconnect;
   unsigned long _lastMqttReconnect;
+  unsigned long _lastHeartbeat;
   bool          _wasOnline;
 
   void connectWiFi();
