@@ -34,25 +34,39 @@ Expected: `59/62` pass (3 pre-existing `esp32.test.ts` failures unrelated to app
 
 Server subscribes to both `courts/+/display` and `courts/+/status` (plus `freq.led/courts/+/status`).
 
-### P10 Display Layout
+### Multi-Panel LED Display (3× P10, 96×16)
 
-Each display = 2 P10 panels. Physical resolution:
-- **Horizontal** (side-by-side): 64×16 px = 640×160mm — shows **2 lines** of **5×7** text (line1 y=0, line2 y=8, 1px gap). **line3 is dropped.** Lines that overflow 64px **marquee horizontally** (left direction, scroll-then-wrap). Matches `web/src/components/display/P10Display.tsx` `slice(0, 2)` + `ScrollGroup`.
-- **Vertical** (stacked): 32×32 px = 320×320mm — shows 3 lines of 5×7 text with 2px gaps, horizontal marquee for long text
+The system supports **3 P10 LED panels** chained horizontally (each 32×16, total 96×16 pixels). Content is divided into **zones** — each zone spans 1+ contiguous panels and is independently configured.
 
-Layout toggle in Display Monitor. Configured via `displayLayout` setting.
+**Zone model** (defined in `src/components/display/zone-types.ts`):
+- A **DisplayPage** contains `zones[]` and `durationSeconds`
+- Each **DisplayZone** has `panelStart`, `panelEnd` (0-2), and `lines[]`
+- Each **DisplayLine** has `text`, `color` (hex), `effect` (SCROLL/STATIC/BLINK/paginate)
+- Zones partition the 3 panels contiguously. Max 3 zones. Max 2 lines per zone.
+- 1-line zones render text at 2× scale (10×14px), vertically centered
+- 2-line zones render text at 1× scale (5×7px), stacked with 2px gap
 
-> Authoring rule: put the most important info in `line1` and `line2`. `line3` is best-effort — visible on 32-tall vertical panels, silently dropped on the 16-tall horizontal WF2 controller.
+**Layout templates** (zone presets):
+- `All 3 Combined` — 1 zone across all panels, 2 lines
+- `2+1 Split` — panels 0-1 (64px, 2 lines) + panel 2 (32px, 1 line)
+- `1+1+1` — each panel independent, 1 line
+- `1+2 Split` — panel 0 (32px, 1 line) + panels 1-2 (64px, 2 lines)
 
-### Display Templates (Sequence)
+**Visual Designer** (`DisplaySequenceEditorV2` in settings):
+- WYSIWYG editor replacing the old JSON textarea
+- `P10Canvas`: interactive 3-panel SVG preview (96×16) with clickable zone regions
+- `ZonePanel`: sidebar for editing selected zone (panel assignment, line count, per-line text/color/effect with variable autocomplete)
+- `PageToolbar`: page dots navigation + add/remove + duration per page
+- `TemplateDropdown`: one-click zone layout presets
+- Live preview renders LED dots using the same 5×7 bitmap font as the firmware
 
-Stored in `settings` table under key `displaySequence`. Three sections:
-- `idle` — pages shown when court is available
-- `prep` — pages shown during preparation phase
-- `game` — pages shown during active game
+**Sequence storage** — stored in `settings` table key `displaySequence`:
+- Three sections: `idle`, `prep`, `game`
+- Each section has `interval` (default page duration) and `pages[]` with zone definitions
+- Backward compatible: old flat-format pages (text/color/effect without zones) auto-convert to a single zone spanning all 3 panels
 
-Each section has `interval` (seconds per page) and `pages[]` (array of line templates). Supports variables:
-- `{court_name}`, `{match_info}`, `{timer}`, `{queue_count}`
+**Supported variables** (substituted server-side in `sports-caster.ts` and client-side for timer):
+`{court_name}`, `{match_title}`, `{match_type}`, `{duration}`, `{players}`, `{timer}`, `{elapsed}`, `{queue_count}`, `{next_name}`, `{next_match}`
 
 Cycles through pages via `POST /api/display/publish-all` (called every 5s by client processor).
 
@@ -96,8 +110,14 @@ Supabase Realtime channels on `games`, `courts`, `queue_entries` tables:
 | `src/lib/queue/reservation-service.ts` | Accept/decline offers |
 | `src/components/terminal/TerminalKiosk.tsx` | Full kiosk booking flow |
 | `src/components/terminal/QueueBoard.tsx` | Public court + queue display |
-| `src/components/display/P10Display.tsx` | Dot-matrix P10 LED simulator |
-| `src/features/settings/components/DisplaySequenceEditor.tsx` | Admin: display template editor |
+| `src/components/display/P10Display.tsx` | Dot-matrix P10 LED simulator (legacy single-page) |
+| `src/components/display/P10Canvas.tsx` | Interactive 3-panel zone preview (96×16 SVG) |
+| `src/components/display/ZonePanel.tsx` | Zone property editor sidebar |
+| `src/components/display/PageToolbar.tsx` | Page navigation + duration control |
+| `src/components/display/TemplateDropdown.tsx` | Zone layout preset dropdown |
+| `src/components/display/DisplaySequenceEditorV2.tsx` | Visual WYSIWYG display sequence designer |
+| `src/components/display/zone-types.ts` | Zone model TypeScript types |
+| `src/features/settings/components/DisplaySequenceEditor.tsx` | Admin: display template editor (re-exports V2) |
 | `src/features/settings/components/ProductsEditor.tsx` | Admin: products/pricing editor |
 | `src/app/api/display/publish-all/route.ts` | Periodic display publisher |
 | `src/app/api/display/state/[courtId]/route.ts` | Get current display state |
