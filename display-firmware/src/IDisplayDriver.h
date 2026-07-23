@@ -11,6 +11,10 @@ struct ZoneLineRender {
   float scrollSpeed;
   uint8_t marginTop;
   uint8_t marginBottom;
+  bool hasBgColor = false;
+  uint8_t bgR = 0;
+  uint8_t bgG = 0;
+  uint8_t bgB = 0;
 };
 
 struct BorderRange {

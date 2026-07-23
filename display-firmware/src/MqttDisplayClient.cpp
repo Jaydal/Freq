@@ -76,6 +76,8 @@ void MqttDisplayClient::begin(const char* ssid, const char* password,
   snprintf(_cmdTopic, sizeof(_cmdTopic), "freq/display/cmd/%s", _mac.c_str());
   log_i("[mqtt] MAC: %s, CMD topic: %s", _mac.c_str(), _cmdTopic);
   _playlist.reserve(8);
+  memset(_subpageIdx, 0, sizeof(_subpageIdx));
+  memset(_lastSubChange, 0, sizeof(_lastSubChange));
 
   connectWiFi();
   connectMqtt();
@@ -135,6 +137,29 @@ void MqttDisplayClient::update() {
     }
   }
 
+  // Sub-page cycling for all lines on the current page
+  if (!_playlist.empty() && _wasOnline) {
+    const auto& page = _playlist[_currentPageIndex];
+    if (!_overrideActive) {
+      unsigned long now = millis();
+      for (int zi = 0; zi < page.zoneCount && zi < 3; zi++) {
+        for (int li = 0; li < page.zones[zi].lineCount && li < 2; li++) {
+          const auto& line = page.zones[zi].lines[li];
+          if (line.subpages.size() <= 1) continue;
+          int si = _subpageIdx[zi][li];
+          if (si >= (int)line.subpages.size()) si = 0;
+          const auto& sp = line.subpages[si];
+          if (sp.durationMs > 0 && now - _lastSubChange[zi][li] >= sp.durationMs) {
+            _lastSubChange[zi][li] = now;
+            _subpageIdx[zi][li] = (si + 1) % line.subpages.size();
+            applyCurrentPage();
+            _driver.update();
+          }
+        }
+      }
+    }
+  }
+
   // Override page rotation
   if (_overrideActive && !_overridePages.empty()) {
     unsigned long now = millis();
@@ -146,6 +171,25 @@ void MqttDisplayClient::update() {
       _overridePageIndex = (_overridePageIndex + 1) % _overridePages.size();
       applyCurrentPage();
     }
+    // Sub-page cycling for override lines
+    {
+      const auto& opage = _overridePages[oIdx];
+      for (int zi = 0; zi < opage.zoneCount && zi < 3; zi++) {
+        for (int li = 0; li < opage.zones[zi].lineCount && li < 2; li++) {
+          const auto& line = opage.zones[zi].lines[li];
+          if (line.subpages.size() <= 1) continue;
+          int si = _subpageIdx[zi][li];
+          if (si >= (int)line.subpages.size()) si = 0;
+          const auto& sp = line.subpages[si];
+          if (sp.durationMs > 0 && now - _lastSubChange[zi][li] >= sp.durationMs) {
+            _lastSubChange[zi][li] = now;
+            _subpageIdx[zi][li] = (si + 1) % line.subpages.size();
+            applyCurrentPage();
+            _driver.update();
+          }
+        }
+      }
+    }
   }
 
   _driver.update();
@@ -154,6 +198,8 @@ void MqttDisplayClient::update() {
 // ── Private ───────────────────────────────────────────────────────────────────
 
 void MqttDisplayClient::applyCurrentPage() {
+  memset(_subpageIdx, 0, sizeof(_subpageIdx));
+  memset(_lastSubChange, 0, sizeof(_lastSubChange));
   // Override takes priority over playlist
   if (_overrideActive && !_overridePages.empty()) {
     size_t idx = _overridePageIndex % _overridePages.size();
@@ -175,17 +221,28 @@ void MqttDisplayClient::applyCurrentPage() {
       }
       for (int li = 0; li < page.zones[zi].lineCount && li < 2; li++) {
         const auto& srcLine = page.zones[zi].lines[li];
-        rz[zi].lines[li].text = srcLine.text.c_str();
+        int si = _subpageIdx[zi][li];
+        if (srcLine.subpages.empty()) continue;
+        if (si >= (int)srcLine.subpages.size()) si = 0;
+        const auto& sp = srcLine.subpages[si];
+
+        rz[zi].lines[li].text = sp.text.c_str();
         uint8_t r = 0, g = 255, b = 0;
-        parseHexColor(srcLine.color, r, g, b);
+        parseHexColor(sp.color, r, g, b);
         rz[zi].lines[li].r = r;
         rz[zi].lines[li].g = g;
         rz[zi].lines[li].b = b;
-        rz[zi].lines[li].effect = srcLine.effect.c_str();
-        rz[zi].lines[li].align = srcLine.align.c_str();
-        rz[zi].lines[li].scrollSpeed = srcLine.scrollSpeed;
+        rz[zi].lines[li].effect = sp.effect.c_str();
+        rz[zi].lines[li].align = sp.align.c_str();
+        rz[zi].lines[li].scrollSpeed = sp.scrollSpeed;
         rz[zi].lines[li].marginTop = srcLine.marginTop;
         rz[zi].lines[li].marginBottom = srcLine.marginBottom;
+        rz[zi].lines[li].hasBgColor = !sp.bgColor.empty();
+        if (rz[zi].lines[li].hasBgColor) {
+          uint8_t br = 0, bg = 0, bb = 0;
+          parseHexColor(sp.bgColor, br, bg, bb);
+          rz[zi].lines[li].bgR = br; rz[zi].lines[li].bgG = bg; rz[zi].lines[li].bgB = bb;
+        }
       }
     }
     _driver.setZones(rz, page.zoneCount);
@@ -213,17 +270,28 @@ void MqttDisplayClient::applyCurrentPage() {
 
     for (int li = 0; li < page.zones[zi].lineCount && li < 2; li++) {
       const auto& srcLine = page.zones[zi].lines[li];
-      rz[zi].lines[li].text = srcLine.text.c_str();
+      int si = _subpageIdx[zi][li];
+      if (srcLine.subpages.empty()) continue;
+      if (si >= (int)srcLine.subpages.size()) si = 0;
+      const auto& sp = srcLine.subpages[si];
+
+      rz[zi].lines[li].text = sp.text.c_str();
       uint8_t r = 0, g = 255, b = 0;
-      parseHexColor(srcLine.color, r, g, b);
+      parseHexColor(sp.color, r, g, b);
       rz[zi].lines[li].r = r;
       rz[zi].lines[li].g = g;
       rz[zi].lines[li].b = b;
-      rz[zi].lines[li].effect = srcLine.effect.c_str();
-      rz[zi].lines[li].align = srcLine.align.c_str();
-      rz[zi].lines[li].scrollSpeed = srcLine.scrollSpeed;
+      rz[zi].lines[li].effect = sp.effect.c_str();
+      rz[zi].lines[li].align = sp.align.c_str();
+      rz[zi].lines[li].scrollSpeed = sp.scrollSpeed;
       rz[zi].lines[li].marginTop = srcLine.marginTop;
       rz[zi].lines[li].marginBottom = srcLine.marginBottom;
+      rz[zi].lines[li].hasBgColor = !sp.bgColor.empty();
+      if (rz[zi].lines[li].hasBgColor) {
+        uint8_t br = 0, bg = 0, bb = 0;
+        parseHexColor(sp.bgColor, br, bg, bb);
+        rz[zi].lines[li].bgR = br; rz[zi].lines[li].bgG = bg; rz[zi].lines[li].bgB = bb;
+      }
     }
   }
 
@@ -365,11 +433,16 @@ void MqttDisplayClient::handleCmdMessage(uint8_t* payload, unsigned int len) {
             uint8_t li = 0;
             for (JsonObject l : lines) {
               if (li >= 2) break;
-              dz.lines[li].text = l["text"] | "";
-              dz.lines[li].color = l["color"] | "#FFFFFF";
-              dz.lines[li].effect = l["effect"] | "SCROLL";
-              dz.lines[li].align = l["align"] | "center";
-              dz.lines[li].scrollSpeed = l["scrollSpeed"] | 1.0f;
+              {
+                SubPage sp;
+                sp.text = l["text"] | "";
+                sp.color = l["color"] | "#FFFFFF";
+                sp.effect = l["effect"] | "SCROLL";
+                sp.align = l["align"] | "center";
+                sp.scrollSpeed = l["scrollSpeed"] | 1.0f;
+                sp.durationMs = 5000;
+                dz.lines[li].subpages.push_back(sp);
+              }
               dz.lines[li].marginTop = l["marginTop"] | 0;
               dz.lines[li].marginBottom = l["marginBottom"] | 2;
               li++;
@@ -387,11 +460,16 @@ void MqttDisplayClient::handleCmdMessage(uint8_t* payload, unsigned int len) {
           p.zones[0].borderCount = 0;
           p.zones[0].scale = 0;
           p.zones[0].valign = "middle";
-          p.zones[0].lines[0].text = doc["display"]["message"] | "OVERRIDE";
-          p.zones[0].lines[0].color = "#FF0000";
-          p.zones[0].lines[0].effect = "SCROLL";
-          p.zones[0].lines[0].align = "center";
-          p.zones[0].lines[0].scrollSpeed = 1.0f;
+          {
+            SubPage sp;
+            sp.text = doc["display"]["message"] | "OVERRIDE";
+            sp.color = "#FF0000";
+            sp.effect = "SCROLL";
+            sp.align = "center";
+            sp.scrollSpeed = 1.0f;
+            sp.durationMs = 5000;
+            p.zones[0].lines[0].subpages.push_back(sp);
+          }
           p.zones[0].lines[0].marginTop = 0;
           p.zones[0].lines[0].marginBottom = 2;
         }
@@ -481,11 +559,16 @@ void MqttDisplayClient::handleMessage(uint8_t* payload, unsigned int len) {
       p.zones[0].borderCount = 0;
       p.zones[0].scale = 0;
       p.zones[0].valign = "middle";
-      p.zones[0].lines[0].text = msg;
-      p.zones[0].lines[0].color = doc["color"] | "#FFFFFF";
-      p.zones[0].lines[0].effect = doc["animation"] | "SCROLL";
-      p.zones[0].lines[0].align = "center";
-      p.zones[0].lines[0].scrollSpeed = 1.0f;
+      {
+        SubPage sp;
+        sp.text = msg;
+        sp.color = doc["color"] | "#FFFFFF";
+        sp.effect = doc["animation"] | "SCROLL";
+        sp.align = "center";
+        sp.scrollSpeed = 1.0f;
+        sp.durationMs = 5000;
+        p.zones[0].lines[0].subpages.push_back(sp);
+      }
       p.zones[0].lines[0].marginTop = 0;
       p.zones[0].lines[0].marginBottom = 2;
       _playlist.push_back(p);
@@ -522,13 +605,34 @@ void MqttDisplayClient::handleMessage(uint8_t* payload, unsigned int len) {
           if (!lines.isNull()) {
             for (JsonObject line : lines) {
               if (z.lineCount >= 2) break;
-              z.lines[z.lineCount].text = line["text"] | "";
-              z.lines[z.lineCount].color = line["color"] | "#FFFFFF";
-              z.lines[z.lineCount].effect = line["effect"] | "SCROLL";
-              z.lines[z.lineCount].align = line["align"] | "center";
-              z.lines[z.lineCount].scrollSpeed = line["scrollSpeed"].is<float>() ? line["scrollSpeed"].as<float>() : 1.0f;
-              z.lines[z.lineCount].marginTop = line["marginTop"] | 0;
-              z.lines[z.lineCount].marginBottom = line["marginBottom"] | 2;
+              ZoneLine& zl = z.lines[z.lineCount];
+              
+              JsonArray subpages = line["subpages"];
+              if (!subpages.isNull()) {
+                for (JsonVariant spv : subpages) {
+                  SubPage sp;
+                  sp.text = spv["text"].as<std::string>();
+                  sp.color = spv["color"].as<std::string>();
+                  sp.bgColor = spv["bgColor"].as<std::string>();
+                  sp.effect = spv["effect"].as<std::string>();
+                  sp.align = spv["align"].as<std::string>();
+                  sp.scrollSpeed = spv["scrollSpeed"].as<float>();
+                  sp.durationMs = spv["durationMs"].as<uint16_t>();
+                  if (sp.durationMs == 0) sp.durationMs = 5000;
+                  zl.subpages.push_back(sp);
+                }
+              } else {
+                SubPage sp;
+                sp.text = line["text"].as<std::string>();
+                sp.color = line["color"].as<std::string>();
+                sp.effect = line["effect"].as<std::string>();
+                sp.align = line["align"].as<std::string>();
+                sp.scrollSpeed = line["scrollSpeed"].as<float>();
+                sp.durationMs = 5000;
+                zl.subpages.push_back(sp);
+              }
+              zl.marginTop = line["marginTop"] | 0;
+              zl.marginBottom = line["marginBottom"] | 2;
               z.lineCount++;
             }
           }
@@ -543,11 +647,16 @@ void MqttDisplayClient::handleMessage(uint8_t* payload, unsigned int len) {
         z.borderCount = 0;
         z.scale = 0;
         z.valign = "middle";
-        z.lines[0].text = page["text"] | "";
-        z.lines[0].color = page["color"] | "#FFFFFF";
-        z.lines[0].effect = page["effect"] | "SCROLL";
-        z.lines[0].align = "center";
-        z.lines[0].scrollSpeed = 1.0f;
+        {
+          SubPage sp;
+          sp.text = page["text"] | "";
+          sp.color = page["color"] | "#FFFFFF";
+          sp.effect = page["effect"] | "SCROLL";
+          sp.align = "center";
+          sp.scrollSpeed = 1.0f;
+          sp.durationMs = 5000;
+          z.lines[0].subpages.push_back(sp);
+        }
         z.lines[0].marginTop = 0;
         z.lines[0].marginBottom = 2;
         p.zoneCount = 1;
