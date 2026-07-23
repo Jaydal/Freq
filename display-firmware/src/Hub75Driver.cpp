@@ -115,16 +115,18 @@ void Hub75Driver::begin() {
   _matrix->fillScreen(green);
   _matrix->flipDMABuffer();
   delay(500);
+  _ballX = WF2_RES_X / 2 - 1;
+  _ballY = WF2_RES_Y / 2 - 1;
+  _ballDx = 1;
+  _ballDy = 1;
+  _ballLastMove = millis();
+  _splashActive = true;
   _matrix->clearScreen();
-  _matrix->flipDMABuffer();
-  int tw = textWidth5x7Scaled("FREQ", 2);
-  int x = (WF2_RES_X - tw) / 2;
-  int y = (WF2_RES_Y - CHAR_H * 2) / 2;
-  drawText5x7Scaled("FREQ", x, y, green, 2, 0, WF2_RES_X);
   _matrix->flipDMABuffer();
 }
 
 void Hub75Driver::clear() {
+  _splashActive = false;
   _zoneCount = 0;
   for (int i = 0; i < MAX_ZONES; i++) _zones[i].hasData = false;
   _fallbackText = "";
@@ -133,6 +135,7 @@ void Hub75Driver::clear() {
 }
 
 void Hub75Driver::showRow(uint8_t row, const char* text) {
+  _splashActive = false;
   if (row != 0 || !_matrix) return;
 
   // Build a temporary single zone from the text
@@ -183,6 +186,7 @@ void Hub75Driver::setAnimationMode(const char* mode) {
 }
 
 void Hub75Driver::setZones(const ZoneRenderInfo* zones, uint8_t count) {
+  _splashActive = false;
   if (count > MAX_ZONES) count = MAX_ZONES;
   _zoneCount = count;
 
@@ -261,6 +265,26 @@ void Hub75Driver::runDiagnosticSequence() {
 
 void Hub75Driver::update() {
   if (!_matrix || _otaActive) return;
+
+  if (_splashActive) {
+    unsigned long now = millis();
+    if (now - _ballLastMove >= 60) {
+      _ballLastMove = now;
+      _ballX += _ballDx;
+      _ballY += _ballDy;
+      if (_ballX <= 0 || _ballX >= WF2_RES_X - BALL_SIZE) {
+        _ballDx = -_ballDx;
+        _ballX += _ballDx;
+      }
+      if (_ballY <= 0 || _ballY >= WF2_RES_Y - BALL_SIZE) {
+        _ballDy = -_ballDy;
+        _ballY += _ballDy;
+      }
+      redraw();
+    }
+    return;
+  }
+
   bool needsRedraw = false;
   unsigned long now = millis();
 
@@ -328,6 +352,17 @@ String Hub75Driver::substituteTimer(const String& text) const {
 
 void Hub75Driver::redraw() {
   if (!_matrix || _otaActive) return;
+
+  if (_splashActive) {
+    _matrix->clearScreen();
+    uint16_t green = _matrix->color565(0, 255, 0);
+    for (int dy = 0; dy < BALL_SIZE; dy++)
+      for (int dx = 0; dx < BALL_SIZE; dx++)
+        drawPixelMapped(_ballX + dx, _ballY + dy, green);
+    _matrix->flipDMABuffer();
+    return;
+  }
+
   _matrix->clearScreen();
 
   for (int zi = 0; zi < _zoneCount; zi++) {

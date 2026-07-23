@@ -62,6 +62,13 @@ private:
   int _fallbackScrollX;
   unsigned long _fallbackScrollTick;
 
+  // Boot splash
+  bool _splashActive = false;
+  int _ballX = 0, _ballY = 0;
+  int _ballDx = 1, _ballDy = 1;
+  unsigned long _ballLastMove = 0;
+  static constexpr int BALL_SIZE = 3;
+
   // OTA safety — suppress DMA during firmware updates
   volatile bool _otaActive = false;
 
