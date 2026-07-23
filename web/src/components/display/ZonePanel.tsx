@@ -4,8 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
-import { PRESET_COLORS } from './color-utils';
-import type { DisplayZone, DisplayLine } from './zone-types';
+import type { DisplayZone, SubPage } from './zone-types';
 
 const VARIABLES = [
   '{court_name}', '{match_title}', '{match_type}', '{duration}',
@@ -19,8 +18,8 @@ interface Props {
   onDelete?: () => void;
 }
 
-function lineDefault(): DisplayLine {
-  return { text: '', color: '#00FF00', effect: 'STATIC' };
+function subpageDefault(): SubPage {
+  return { text: '', color: '#00FF00', effect: 'STATIC', durationMs: 5000 };
 }
 
 export function ZonePanel({ zone, zoneIndex, onChange, onDelete }: Props) {
@@ -50,13 +49,13 @@ export function ZonePanel({ zone, zoneIndex, onChange, onDelete }: Props) {
 
   function setLineCount(count: 1 | 2) {
     const lines = [...zone.lines];
-    while (lines.length < count) lines.push(lineDefault());
+    while (lines.length < count) lines.push({ subpages: [subpageDefault()] });
     while (lines.length > count) lines.pop();
     onChange({ ...zone, lines });
   }
 
-  function updateLine(index: number, partial: Partial<DisplayLine>) {
-    const lines = zone.lines.map((l, i) => (i === index ? { ...l, ...partial } : l));
+  function updateLine(index: number, subpages: SubPage[]) {
+    const lines = zone.lines.map((l, i) => (i === index ? { ...l, subpages } : l));
     onChange({ ...zone, lines });
   }
 
@@ -226,102 +225,151 @@ export function ZonePanel({ zone, zoneIndex, onChange, onDelete }: Props) {
         >
           <Label className="text-xs text-zinc-500">Line {li + 1}</Label>
 
-          <div className="relative">
-            <Input
-              value={line.text}
-              onChange={e => updateLine(li, { text: e.target.value })}
-              placeholder="Enter text..."
-              className="font-mono text-xs bg-zinc-950 border-zinc-700 text-zinc-200 pr-8"
-            />
-            <details className="absolute right-0 top-0 bottom-0 group">
-              <summary className="flex items-center justify-center h-full px-2 cursor-pointer text-xs text-zinc-600 hover:text-zinc-400">
-{'{'}x{'}'}
-              </summary>
-              <div className="absolute right-0 top-full mt-1 bg-zinc-900 border border-zinc-700 rounded-md p-1.5 shadow-xl z-10 min-w-[140px]">
-                {VARIABLES.map(v => (
+          {(zone.lines[li].subpages ?? []).map((sp, spi) => (
+            <div key={spi} className="space-y-2 p-3 bg-zinc-900/50 rounded border border-zinc-700/50">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs text-zinc-500">Sub-page {spi + 1}</Label>
+                {(zone.lines[li].subpages?.length ?? 0) > 1 && (
                   <button
-                    key={v}
-                    className="block w-full text-left text-xs text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 px-2 py-1 rounded"
-                    onClick={() => updateLine(li, { text: line.text + v })}
+                    onClick={() => updateLine(li, (zone.lines[li].subpages ?? []).filter((_, i) => i !== spi))}
+                    className="text-xs text-red-500 hover:text-red-400"
                   >
-                    {v}
+                    Remove
                   </button>
-                ))}
+                )}
               </div>
-            </details>
-          </div>
 
-          <div className="space-y-1">
-            <Label className="text-xs text-zinc-500">Color</Label>
-            <div className="flex items-center gap-1.5 flex-wrap">
-              {PRESET_COLORS.map(c => (
-                <button
-                  key={c}
-                  onClick={() => updateLine(li, { color: c })}
-                  className={`w-5 h-5 rounded-full border-2 transition-all ${
-                    line.color === c ? 'border-white scale-110' : 'border-transparent'
-                  }`}
-                  style={{ backgroundColor: c }}
+              <div className="relative">
+                <Input
+                  value={sp.text}
+                  onChange={e => {
+                    const subs = [...(zone.lines[li].subpages ?? [])];
+                    subs[spi] = { ...subs[spi], text: e.target.value };
+                    updateLine(li, subs);
+                  }}
+                  placeholder="Enter text..."
+                  className="font-mono text-xs bg-zinc-950 border-zinc-700 text-zinc-200 pr-8"
                 />
-              ))}
-              <input
-                type="color"
-                value={line.color}
-                onChange={e => updateLine(li, { color: e.target.value })}
-                className="w-5 h-5 rounded cursor-pointer border-0 p-0 bg-transparent"
-              />
-            </div>
-          </div>
+                <details className="absolute right-0 top-0 bottom-0 group">
+                  <summary className="flex items-center justify-center h-full px-2 cursor-pointer text-xs text-zinc-600 hover:text-zinc-400">
+{'{'}x{'}'}
+                  </summary>
+                  <div className="absolute right-0 top-full mt-1 bg-zinc-900 border border-zinc-700 rounded-md p-1.5 shadow-xl z-10 min-w-[140px]">
+                    {VARIABLES.map(v => (
+                      <button
+                        key={v}
+                        className="block w-full text-left text-xs text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 px-2 py-1 rounded"
+                        onClick={() => {
+                          const subs = [...(zone.lines[li].subpages ?? [])];
+                          subs[spi] = { ...subs[spi], text: sp.text + v };
+                          updateLine(li, subs);
+                        }}
+                      >
+                        {v}
+                      </button>
+                    ))}
+                  </div>
+                </details>
+              </div>
 
-          <div className="space-y-1">
-            <Label className="text-xs text-zinc-500">Effect</Label>
-            <Select
-              value={line.effect}
-              onValueChange={v => updateLine(li, { effect: v as DisplayLine['effect'] })}
-            >
-              <SelectTrigger className="h-7 text-xs bg-zinc-950 border-zinc-700 text-zinc-200">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="STATIC">Static (center)</SelectItem>
-                <SelectItem value="SCROLL">Scroll</SelectItem>
-                <SelectItem value="BLINK">Blink</SelectItem>
-                <SelectItem value="paginate">Paginate</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+              <div className="flex gap-2 items-center">
+                <div className="space-y-1 flex-1">
+                  <Label className="text-xs text-zinc-500">Effect</Label>
+                  <Select value={sp.effect}
+                    onValueChange={v => {
+                      const subs = [...(zone.lines[li].subpages ?? [])];
+                      subs[spi] = { ...subs[spi], effect: v as 'SCROLL' | 'STATIC' | 'BLINK' };
+                      updateLine(li, subs);
+                    }}
+                  >
+                    <SelectTrigger className="h-7 text-xs bg-zinc-950 border-zinc-700 text-zinc-200">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="STATIC">Static (center)</SelectItem>
+                      <SelectItem value="SCROLL">Scroll</SelectItem>
+                      <SelectItem value="BLINK">Blink</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs text-zinc-500">Color</Label>
+                  <input type="color" value={sp.color}
+                    onChange={e => {
+                      const subs = [...(zone.lines[li].subpages ?? [])];
+                      subs[spi] = { ...subs[spi], color: e.target.value };
+                      updateLine(li, subs);
+                    }}
+                    className="w-7 h-7 rounded cursor-pointer border-0 p-0 bg-transparent"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs text-zinc-500">BG</Label>
+                  <input type="color" value={sp.bgColor || '#000000'}
+                    onChange={e => {
+                      const subs = [...(zone.lines[li].subpages ?? [])];
+                      subs[spi] = { ...subs[spi], bgColor: e.target.value === '#000000' ? undefined : e.target.value };
+                      updateLine(li, subs);
+                    }}
+                    className="w-7 h-7 rounded cursor-pointer border-0 p-0 bg-transparent"
+                  />
+                </div>
+              </div>
 
-          {line.effect === 'SCROLL' && (
-            <div className="space-y-1">
-              <Label className="text-xs text-zinc-500">Scroll Speed</Label>
-              <Input
-                type="number" min={0.5} max={5} step={0.5}
-                value={line.scrollSpeed ?? 1}
-                onChange={e => updateLine(li, { scrollSpeed: Math.max(0.5, Math.min(5, Number(e.target.value))) })}
-                className="w-16 h-7 text-xs bg-zinc-950 border-zinc-700 text-zinc-200"
-              />
-              <p className="text-xs text-zinc-600">Higher = faster</p>
-            </div>
-          )}
+              <div className="space-y-1">
+                <Label className="text-xs text-zinc-500">Duration (ms)</Label>
+                <Input type="number" min={100} max={60000} step={100}
+                  value={sp.durationMs}
+                  onChange={e => {
+                    const subs = [...(zone.lines[li].subpages ?? [])];
+                    subs[spi] = { ...subs[spi], durationMs: Math.max(100, Math.min(60000, Number(e.target.value))) };
+                    updateLine(li, subs);
+                  }}
+                  className="w-20 h-7 text-xs bg-zinc-950 border-zinc-700 text-zinc-200"
+                />
+              </div>
 
-          <div className="space-y-1">
-            <Label className="text-xs text-zinc-500">H Align</Label>
-            <div className="flex gap-1">
-              {(['left', 'center', 'right'] as const).map(a => (
-                <button
-                  key={a}
-                  onClick={() => updateLine(li, { align: a })}
-                  className={`px-2 py-1 text-xs rounded font-medium transition-colors ${
-                    (line.align || 'center') === a
-                      ? 'bg-zinc-700 text-white'
-                      : 'bg-zinc-800 text-zinc-500 hover:text-zinc-300'
-                  }`}
-                >
-                  {a.charAt(0).toUpperCase() + a.slice(1)}
-                </button>
-              ))}
+              {sp.effect === 'SCROLL' && (
+                <div className="space-y-1">
+                  <Label className="text-xs text-zinc-500">Scroll Speed</Label>
+                  <Input type="number" min={0.5} max={5} step={0.5}
+                    value={sp.scrollSpeed ?? 1}
+                    onChange={e => {
+                      const subs = [...(zone.lines[li].subpages ?? [])];
+                      subs[spi] = { ...subs[spi], scrollSpeed: Math.max(0.5, Math.min(5, Number(e.target.value))) };
+                      updateLine(li, subs);
+                    }}
+                    className="w-16 h-7 text-xs bg-zinc-950 border-zinc-700 text-zinc-200"
+                  />
+                </div>
+              )}
+
+              <div className="space-y-1">
+                <Label className="text-xs text-zinc-500">H Align</Label>
+                <div className="flex gap-1">
+                  {(['left', 'center', 'right'] as const).map(a => (
+                    <button key={a}
+                      onClick={() => {
+                        const subs = [...(zone.lines[li].subpages ?? [])];
+                        subs[spi] = { ...subs[spi], align: a };
+                        updateLine(li, subs);
+                      }}
+                      className={`px-2 py-1 text-xs rounded font-medium transition-colors ${
+                        (sp.align || 'center') === a ? 'bg-zinc-700 text-white' : 'bg-zinc-800 text-zinc-500 hover:text-zinc-300'
+                      }`}
+                    >
+                      {a.charAt(0).toUpperCase() + a.slice(1)}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
-          </div>
+          ))}
+          <Button variant="outline" size="sm" onClick={() => {
+            updateLine(li, [...(zone.lines[li].subpages ?? []), subpageDefault()]);
+          }} className="text-xs">
+            + Add Sub-page
+          </Button>
 
           <div className="space-y-1">
             <Label className="text-xs text-zinc-500">Margins (top / bottom)</Label>
@@ -329,14 +377,24 @@ export function ZonePanel({ zone, zoneIndex, onChange, onDelete }: Props) {
               <Input
                 type="number" min={0} max={16}
                 value={line.marginTop ?? 0}
-                onChange={e => updateLine(li, { marginTop: Math.max(0, Math.min(16, Number(e.target.value))) })}
+                onChange={e => {
+                  const lines = zone.lines.map((l, i) =>
+                    i === li ? { ...l, marginTop: Math.max(0, Math.min(16, Number(e.target.value))) } : l
+                  );
+                  onChange({ ...zone, lines });
+                }}
                 className="w-14 h-7 text-xs bg-zinc-950 border-zinc-700 text-zinc-200"
               />
               <span className="text-xs text-zinc-600">/</span>
               <Input
                 type="number" min={0} max={16}
                 value={line.marginBottom ?? (li < zone.lines.length - 1 ? 2 : 0)}
-                onChange={e => updateLine(li, { marginBottom: Math.max(0, Math.min(16, Number(e.target.value))) })}
+                onChange={e => {
+                  const lines = zone.lines.map((l, i) =>
+                    i === li ? { ...l, marginBottom: Math.max(0, Math.min(16, Number(e.target.value))) } : l
+                  );
+                  onChange({ ...zone, lines });
+                }}
                 className="w-14 h-7 text-xs bg-zinc-950 border-zinc-700 text-zinc-200"
               />
             </div>
