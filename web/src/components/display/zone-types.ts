@@ -1,9 +1,15 @@
-export interface DisplayLine {
+export interface SubPage {
   text: string;
+  effect: 'SCROLL' | 'STATIC' | 'BLINK';
   color: string;
-  effect: 'SCROLL' | 'STATIC' | 'BLINK' | 'paginate';
+  bgColor?: string;
   align?: 'left' | 'center' | 'right';
   scrollSpeed?: number;
+  durationMs: number;
+}
+
+export interface DisplayLine {
+  subpages: SubPage[];
   marginTop?: number;
   marginBottom?: number;
 }

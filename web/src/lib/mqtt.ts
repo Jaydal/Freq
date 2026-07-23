@@ -20,7 +20,16 @@ export interface DisplayPage {
     borderRows?: { start: number; end: number }[];
     scale?: number;
     valign?: string;
-    lines: { text: string; color: string; effect: string; align?: string; scrollSpeed?: number; marginTop?: number; marginBottom?: number }[];
+    lines: {
+      subpages?: { text: string; color: string; effect: string; align?: string; scrollSpeed?: number; durationMs: number; bgColor?: string }[];
+      text?: string;  // legacy compat
+      color?: string;
+      effect?: string;
+      marginTop?: number;
+      marginBottom?: number;
+      align?: string;
+      scrollSpeed?: number;
+    }[];
   }[];
 }
 
