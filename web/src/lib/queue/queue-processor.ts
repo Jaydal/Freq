@@ -123,6 +123,27 @@ export async function processCourtQueue(courtId: string): Promise<void> {
     await supabase.from('queue_entries').update({ status: 'completed', court_id: courtId, updated_at: now.toISOString() }).eq('id', entry.id);
 
     // Publish display and board
+    const { data: seqSettings } = await supabase
+      .from('settings')
+      .select('key, value')
+      .in('key', ['displaySequence', 'preparationTime']);
+
+    let displaySequence;
+    try {
+      const v = seqSettings?.find(s => s.key === 'displaySequence')?.value;
+      if (v) displaySequence = JSON.parse(v);
+    } catch {}
+
+    const rawPrepSec = parseInt(seqSettings?.find(s => s.key === 'preparationTime')?.value ?? '300', 10);
+    const prepTimeSec = isNaN(rawPrepSec) ? 300 : rawPrepSec;
+
+    const { data: allWaiting } = await supabase
+      .from('queue_entries')
+      .select('court_id')
+      .eq('status', 'waiting');
+
+    const courtQueueCount = allWaiting?.length ?? 0;
+
     publishDisplay(courtId, generatePayload(courtId, {
       current: {
         name: entry.match_title || '',
@@ -132,6 +153,11 @@ export async function processCourtQueue(courtId: string): Promise<void> {
         matchType,
       },
       upcoming: [],
+    }, {
+      courtName: court.name,
+      queueCount: courtQueueCount,
+      displaySequence,
+      prepTimeSec,
     }));
 
     return;
@@ -162,6 +188,45 @@ export async function completeExpiredGames(): Promise<string[]> {
         .update({ status: 'Completed', end_time: now.toISOString() })
         .eq('id', game.id);
       freedCourtIds.add(game.court_id);
+    }
+  }
+
+  if (freedCourtIds.size > 0) {
+    const { data: settings } = await supabase
+      .from('settings')
+      .select('key, value')
+      .in('key', ['displaySequence', 'preparationTime']);
+
+    let displaySequence;
+    try {
+      const v = settings?.find(s => s.key === 'displaySequence')?.value;
+      if (v) displaySequence = JSON.parse(v);
+    } catch {}
+
+    const { data: courts } = await supabase
+      .from('courts')
+      .select('id, name')
+      .in('id', [...freedCourtIds]);
+
+    const { data: waiting } = await supabase
+      .from('queue_entries')
+      .select('court_id')
+      .eq('status', 'waiting');
+
+    const courtQueueCounts = new Map<string, number>();
+    if (waiting) {
+      for (const e of waiting) {
+        courtQueueCounts.set(e.court_id, (courtQueueCounts.get(e.court_id) ?? 0) + 1);
+      }
+    }
+
+    for (const court of courts ?? []) {
+      const payload = generatePayload(court.id, { current: null, upcoming: [] }, {
+        courtName: court.name,
+        queueCount: courtQueueCounts.get(court.id) ?? 0,
+        displaySequence,
+      });
+      publishDisplay(court.id, payload);
     }
   }
 
