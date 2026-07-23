@@ -67,6 +67,9 @@ private:
   int _ballX = 0, _ballY = 0;
   int _ballDx = 1, _ballDy = 1;
   unsigned long _ballLastMove = 0;
+  unsigned long _splashStartTime = 0;
+  bool _splashStaticDrawn = false;
+  static constexpr unsigned long SPLASH_DURATION_MS = 10000;
   static constexpr int BALL_SIZE = 3;
 
   // OTA safety — suppress DMA during firmware updates
