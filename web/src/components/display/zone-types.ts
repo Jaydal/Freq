@@ -9,7 +9,12 @@ export interface SubPage {
 }
 
 export interface DisplayLine {
-  subpages: SubPage[];
+  subpages?: SubPage[];
+  text?: string;
+  color?: string;
+  effect?: 'SCROLL' | 'STATIC' | 'BLINK' | 'paginate';
+  align?: 'left' | 'center' | 'right';
+  scrollSpeed?: number;
   marginTop?: number;
   marginBottom?: number;
 }
