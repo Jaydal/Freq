@@ -75,6 +75,28 @@ const DEFAULTS: string = JSON.stringify({
   },
 }, null, 2);
 
+function convertLineToSubpages(line: any): any {
+  if (line.subpages) return line;
+  return {
+    ...line,
+    subpages: [{
+      text: line.text || '',
+      color: line.color || '#00FF00',
+      effect: line.effect || 'STATIC',
+      ...(line.align ? { align: line.align } : {}),
+      ...(line.scrollSpeed != null ? { scrollSpeed: line.scrollSpeed } : {}),
+      durationMs: 5000,
+    }],
+  };
+}
+
+function convertZoneToNewFormat(zone: any): any {
+  return {
+    ...zone,
+    lines: (zone.lines || []).map(convertLineToSubpages),
+  };
+}
+
 interface Props {
   sequence: string;
 }
@@ -105,12 +127,7 @@ function parseSequence(raw: string): Record<SectionKey, SectionState> {
                   },
                 ]
               ).map(
-                (l: any): DisplayLine => ({
-                  text: l.text ?? '',
-                  color: l.color ?? '#00FF00',
-                  effect: l.effect ?? 'STATIC',
-                  align: l.align,
-                })
+                (l: any): DisplayLine => convertLineToSubpages(l) as DisplayLine
               ),
             })),
           };
@@ -126,7 +143,13 @@ function parseSequence(raw: string): Record<SectionKey, SectionState> {
                   text: p.text ?? p.line1 ?? '',
                   color: p.color ?? '#00FF00',
                   effect: p.effect ?? 'SCROLL',
-                },
+                  subpages: [{
+                    text: p.text ?? p.line1 ?? '',
+                    color: p.color ?? '#00FF00',
+                    effect: (p.effect ?? 'SCROLL') as 'SCROLL' | 'STATIC' | 'BLINK',
+                    durationMs: 5000,
+                  }],
+                } as DisplayLine,
               ],
             },
           ],
@@ -211,7 +234,7 @@ export function DisplaySequenceEditorV2({ sequence: initial }: Props) {
       ...zone,
       lines: zone.lines.map(line => ({
         ...line,
-        text: substituteMockVariables(line.text),
+        text: substituteMockVariables(line.text ?? ''),
       })),
     }));
   }, [isPreviewing, previewPageIndex, flatPages, zones, mockValues]);
@@ -300,6 +323,11 @@ export function DisplaySequenceEditorV2({ sequence: initial }: Props) {
         body: JSON.stringify({ key: 'displaySequence', value: json }),
       });
       if (!res.ok) throw new Error('Save failed');
+      try {
+        await fetch('/api/display/publish-all', { method: 'POST' });
+      } catch {
+        // non-critical — don't show error
+      }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Unknown error');
     }
