@@ -35,6 +35,8 @@ struct DisplayPage {
   uint16_t durationSeconds;
 };
 
+typedef void (*CourtChangeCallback)(const char* newCourtId);
+
 class MqttDisplayClient {
 public:
   explicit MqttDisplayClient(IDisplayDriver& driver);
@@ -43,6 +45,7 @@ public:
              const char* broker,   uint16_t port,
              const char* courtId,  const char* mqttUser = nullptr, const char* mqttPass = nullptr);
   void update();
+  void setCourtChangeCallback(CourtChangeCallback cb) { _courtChangeCb = cb; }
 
   bool wifiOk()   { return WiFi.status() == WL_CONNECTED; }
   bool mqttOk()   { return _mqtt.connected(); }
@@ -66,6 +69,14 @@ private:
   unsigned long _lastMqttReconnect;
   unsigned long _lastHeartbeat;
   bool          _wasOnline;
+  CourtChangeCallback _courtChangeCb = nullptr;
+  String   _mac;
+  char          _cmdTopic[50];
+  bool          _overrideActive = false;
+  std::vector<DisplayPage> _overridePages;
+  size_t _overridePageIndex = 0;
+  unsigned long _overridePageChangeTime = 0;
+  String   _lastTopic;
 
   void connectWiFi();
   bool connectMqtt();
@@ -76,6 +87,9 @@ private:
   unsigned long _lastPageChangeTime = 0;
 
   void applyCurrentPage();
+  void handleDiscover();
+  void handleCmdMessage(uint8_t* payload, unsigned int len);
+  String buildStatusPayload();
 
   static MqttDisplayClient* _instance;
   static void onMessage(char* topic, uint8_t* payload, unsigned int len);
