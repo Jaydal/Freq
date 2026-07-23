@@ -43,37 +43,12 @@ function getAvailableVRange(borderRows?: { start: number; end: number }[]): { to
 export function textWidthPx(text: string, scale: number): number {
   let w = 0;
   for (const ch of text) {
-    if (w > 0) w += SPACING * scale;
-    if (ch !== ' ') w += CHAR_W * scale;
-  }
-  return w;
-}
-
-export function paginateWords(text: string, maxW: number, scale: number): string[] {
-  const chunks: string[] = [];
-  const words = text.split(' ');
-  let cur: string[] = [];
-  let curW = 0;
-  for (const word of words) {
-    if (word.length === 0) continue;
-    const wordW = textWidthPx(word, scale);
-    if (cur.length === 0) {
-      cur.push(word);
-      curW = wordW;
-    } else {
-      const gapW = SPACING * scale;
-      if (curW + gapW + wordW > maxW) {
-        chunks.push(cur.join(' '));
-        cur = [word];
-        curW = wordW;
-      } else {
-        cur.push(word);
-        curW += gapW + wordW;
-      }
+    if (ch !== ' ') {
+      if (w > 0) w += SPACING * scale;
+      w += CHAR_W * scale;
     }
   }
-  if (cur.length > 0) chunks.push(cur.join(' '));
-  return chunks.length > 0 ? chunks : [text];
+  return w;
 }
 
 export function subst(t: string, mockVars: Record<string, string>): string {
@@ -84,14 +59,18 @@ export function subst(t: string, mockVars: Record<string, string>): string {
   return r;
 }
 
+const _spAccum: Record<string, number> = {};
+
 function renderZoneDots(
+  zoneIndex: number,
   zone: DisplayZone,
   mockVars: Record<string, string>,
   tick: number,
-): { x: number; y: number; color: string }[] {
+): { dots: { x: number; y: number; color: string }[]; bgRects: { x: number; y: number; w: number; h: number; color: string }[] } {
   const zoneWidth = (zone.panelEnd - zone.panelStart + 1) * PANEL_W;
   const zoneX = getPanelX(zone.panelStart);
   const dots: { x: number; y: number; color: string }[] = [];
+  const bgRects: { x: number; y: number; w: number; h: number; color: string }[] = [];
 
   const avail = getAvailableVRange(zone.borderRows);
   const availH = avail.bottom - avail.top + 1;
@@ -100,7 +79,7 @@ function renderZoneDots(
     if (zone.lines.length === 2) return 1;
     if (zone.scale) return zone.scale;
     if (line.effect === 'SCROLL') return 2;
-    const tw2x = textWidthPx(subst(line.text, mockVars).toUpperCase(), 2);
+    const tw2x = textWidthPx(subst(line.text ?? '', mockVars).toUpperCase(), 2);
     return tw2x <= zoneWidth ? 2 : 1;
   });
 
@@ -126,36 +105,78 @@ function renderZoneDots(
 
   zone.lines.forEach((line, li) => {
     const scale = lineScales[li];
-    const text = subst(line.text.toUpperCase(), mockVars);
-    let displayText = text;
-    let displayW = textWidthPx(text, scale);
-    if (line.effect === 'paginate') {
-      const chunks = paginateWords(text, zoneWidth, scale);
-      const ci = Math.floor(tick / 30) % chunks.length;
-      displayText = chunks[ci];
-      displayW = textWidthPx(displayText, scale);
+
+    const subpages = (line as any).subpages;
+    let displayText = '';
+    let displayColor = '#00FF00';
+    let displayBgColor = '';
+    let displayEffect = 'STATIC';
+    let displayAlign: 'left' | 'center' | 'right' = 'center';
+    let displayScrollSpeed = 1;
+
+    if (subpages && subpages.length > 0) {
+      const key = `${zoneIndex}-${li}`;
+      if (!_spAccum[key]) _spAccum[key] = 0;
+
+      let elapsed = _spAccum[key]!;
+      let sp: any = subpages[0];
+      for (let i = 0; i < subpages.length; i++) {
+        if (elapsed < (subpages[i].durationMs || 5000)) {
+          sp = subpages[i];
+          break;
+        }
+        elapsed -= (subpages[i].durationMs || 5000);
+      }
+      _spAccum[key]! += 50;
+
+      displayText = subst(sp.text, mockVars).toUpperCase();
+      displayColor = sp.color || '#00FF00';
+      displayBgColor = sp.bgColor || '';
+      displayEffect = sp.effect || 'STATIC';
+      displayAlign = sp.align || 'center';
+      displayScrollSpeed = sp.scrollSpeed ?? 1;
+    } else {
+      displayText = subst(line.text ?? '', mockVars).toUpperCase();
+      displayColor = line.color || '#00FF00';
+      displayEffect = line.effect || 'STATIC';
+      displayAlign = line.align || 'center';
+      displayScrollSpeed = line.scrollSpeed ?? 1;
     }
+
+    const displayW = textWidthPx(displayText, scale);
     const textW = displayW;
-    const align = line.align || 'center';
-    if (line.effect === 'BLINK') {
+
+    if (displayEffect === 'BLINK') {
       const show = Math.floor(tick / 10) % 2 === 0;
       if (!show) return;
     }
+
     let xOff: number;
-    if (line.effect === 'SCROLL') {
-      const speed = line.scrollSpeed ?? 1;
+    if (displayEffect === 'SCROLL') {
+      const speed = displayScrollSpeed;
       const loopW = textW + zoneWidth;
       const offset = zoneWidth - ((tick * speed) % loopW);
       xOff = zoneX + offset;
-    } else if (align === 'left') {
+    } else if (displayAlign === 'left') {
       xOff = zoneX;
-    } else if (align === 'right') {
+    } else if (displayAlign === 'right') {
       xOff = zoneX + zoneWidth - textW;
     } else {
       xOff = zoneX + Math.floor((zoneWidth - textW) / 2);
     }
 
     const yOff = startY + lineYOffsets[li];
+
+    if (displayBgColor) {
+      bgRects.push({
+        x: xOff,
+        y: yOff,
+        w: textWidthPx(displayText, scale),
+        h: CHAR_H * scale,
+        color: displayBgColor,
+      });
+    }
+
     const rawDots = textToDots(displayText, 0, 0);
     for (const d of rawDots) {
       const px = xOff + d.x * scale;
@@ -165,12 +186,12 @@ function renderZoneDots(
       dots.push({
         x: px,
         y: py,
-        color: line.color || '#00FF00',
+        color: displayColor,
       });
     }
   });
 
-  return dots;
+  return { dots, bgRects };
 }
 
 function fmtTimer(totalSec: number): string {
@@ -327,12 +348,21 @@ export function P10Canvas({ zones, selectedZoneIndex, onZoneSelect }: Props) {
             </defs>
             <g clipPath="url(#canvas-clip)" filter="url(#led-glow-canvas)">
               {zones.map((zone, zi) => {
-                const zx = getPanelX(zone.panelStart);
-                const zw = (zone.panelEnd - zone.panelStart + 1) * PANEL_W;
-                const zoneDots = renderZoneDots(zone, mockVars, tick);
+                const zoneResult = renderZoneDots(zi, zone, mockVars, tick);
                 return (
                   <g key={`zd-${zi}`} clipPath={`url(#zone-clip-${zi})`}>
-                    {zoneDots.map((d, i) => (
+                    {zoneResult.bgRects.map((r, i) => (
+                      <rect
+                        key={`bg-${zi}-${i}`}
+                        x={r.x}
+                        y={r.y}
+                        width={r.w}
+                        height={r.h}
+                        fill={r.color}
+                        opacity={0.95}
+                      />
+                    ))}
+                    {zoneResult.dots.map((d, i) => (
                       <rect
                         key={`dot-${zi}-${i}`}
                         x={d.x + 0.1}
