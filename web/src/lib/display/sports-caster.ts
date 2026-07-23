@@ -143,7 +143,7 @@ export function generatePayload(
                 subpages: line.subpages.map(sp => ({
                   text: substituteVars(sp.text, subVars),
                   color: sp.color,
-                  effect: sp.effect,
+                  effect: sp.effect === 'paginate' ? 'STATIC' : sp.effect,
                   ...(sp.align && sp.align !== 'center' ? { align: sp.align } : {}),
                   ...(sp.scrollSpeed != null && sp.scrollSpeed !== 1 ? { scrollSpeed: sp.scrollSpeed } : {}),
                   durationMs: sp.durationMs,
@@ -158,7 +158,7 @@ export function generatePayload(
               subpages: [{
                 text: rawText,
                 color: line.color || defaultColor,
-                effect: eff,
+                effect: eff === 'paginate' ? 'STATIC' : eff,
                 ...(line.align && line.align !== 'center' ? { align: line.align } : {}),
                 ...(line.scrollSpeed != null && line.scrollSpeed !== 1 ? { scrollSpeed: line.scrollSpeed } : {}),
                 durationMs: pageDuration * 1000,
