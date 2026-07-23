@@ -70,6 +70,11 @@ void MqttDisplayClient::begin(const char* ssid, const char* password,
   _mqtt.setServer(broker, port);
   _mqtt.setCallback(onMessage);
   _mqtt.setBufferSize(4096);
+  _mac = WiFi.macAddress();
+  _mac.toLowerCase();
+  _mac.replace(":", "");
+  snprintf(_cmdTopic, sizeof(_cmdTopic), "freq/display/cmd/%s", _mac.c_str());
+  log_i("[mqtt] MAC: %s, CMD topic: %s", _mac.c_str(), _cmdTopic);
   _playlist.reserve(8);
 
   connectWiFi();
@@ -218,6 +223,9 @@ bool MqttDisplayClient::connectMqtt() {
                     _statusTopic, 1, true, "{\"status\":\"offline\"}")) {
     log_i("[health] MQTT OK");
     _mqtt.subscribe(_displayTopic, 1);
+    _mqtt.subscribe("freq/display/discover", 1);
+    _mqtt.subscribe(_cmdTopic, 1);
+    log_i("[health] Subscribed to freq/display/discover and %s", _cmdTopic);
     log_i("[health] Subscribed to %s (retained msg will follow)", _displayTopic);
     publishOnline();
     _driver.showRow(0, "READY - WAITING FOR QUEUE...");
@@ -241,14 +249,145 @@ void MqttDisplayClient::publishOnline() {
   _mqtt.publish(_statusTopic, (uint8_t*)payload, strlen(payload), true);
 }
 
+// ── DISCOVER & Command Handlers ──────────────────────────────────────────────
+
+String MqttDisplayClient::buildStatusPayload() {
+  JsonDocument doc;
+  doc["mac"] = _mac;
+  doc["ip"] = WiFi.localIP().toString();
+  doc["courtId"] = _courtId;
+  doc["rssi"] = WiFi.RSSI();
+  doc["heap"] = ESP.getFreeHeap();
+  doc["overrideActive"] = _overrideActive;
+  String out;
+  serializeJson(doc, out);
+  return out;
+}
+
+void MqttDisplayClient::handleDiscover() {
+  String payload = buildStatusPayload();
+  _mqtt.publish("freq/display/discover/response", payload.c_str());
+  log_i("[mqtt] Discover response sent: %s", payload.c_str());
+}
+
+void MqttDisplayClient::handleCmdMessage(uint8_t* payload, unsigned int len) {
+  JsonDocument doc;
+  DeserializationError error = deserializeJson(doc, payload, len);
+  if (error) {
+    log_i("[mqtt-cmd] JSON parse failed: %s", error.c_str());
+    return;
+  }
+
+  const char* action = doc["action"] | "";
+
+  if (strcmp(action, "SET_COURT_ID") == 0) {
+    const char* newId = doc["courtId"] | "";
+    if (strlen(newId) > 0 && strcmp(newId, _courtId.c_str()) != 0) {
+      log_i("[mqtt-cmd] SET_COURT_ID: '%s' -> '%s'", _courtId.c_str(), newId);
+      if (_courtChangeCb) {
+        _courtChangeCb(newId);
+      }
+    }
+    return;
+  }
+
+  if (strcmp(action, "OVERRIDE") == 0) {
+    _overridePages.clear();
+    _overrideActive = false;
+    JsonObject display = doc["display"];
+    if (!display.isNull() && !display["pages"].isNull()) {
+      for (JsonObject page : display["pages"].as<JsonArray>()) {
+        DisplayPage p;
+        p.durationSeconds = page["durationSeconds"] | 10;
+        JsonArray zones = page["zones"];
+        if (!zones.isNull()) {
+          uint8_t zi = 0;
+          for (JsonObject z : zones) {
+            if (zi >= 3) break;
+            DisplayZone& dz = p.zones[zi];
+            dz.panelStart = z["panelStart"] | zi;
+            dz.panelEnd = z["panelEnd"] | zi;
+            dz.scale = z["scale"] | 0;
+            dz.valign = z["valign"] | "middle";
+            JsonArray lines = z["lines"];
+            uint8_t li = 0;
+            for (JsonObject l : lines) {
+              if (li >= 2) break;
+              dz.lines[li].text = l["text"] | "";
+              dz.lines[li].color = l["color"] | "#FFFFFF";
+              dz.lines[li].effect = l["effect"] | "SCROLL";
+              dz.lines[li].align = l["align"] | "center";
+              dz.lines[li].scrollSpeed = l["scrollSpeed"] | 1.0f;
+              dz.lines[li].marginTop = l["marginTop"] | 0;
+              dz.lines[li].marginBottom = l["marginBottom"] | 2;
+              li++;
+            }
+            dz.lineCount = li;
+            dz.borderCount = 0;
+            zi++;
+          }
+          p.zoneCount = zi;
+        } else {
+          p.zoneCount = 1;
+          p.zones[0].panelStart = 0;
+          p.zones[0].panelEnd = 2;
+          p.zones[0].lineCount = 1;
+          p.zones[0].borderCount = 0;
+          p.zones[0].scale = 0;
+          p.zones[0].valign = "middle";
+          p.zones[0].lines[0].text = doc["display"]["message"] | "OVERRIDE";
+          p.zones[0].lines[0].color = "#FF0000";
+          p.zones[0].lines[0].effect = "SCROLL";
+          p.zones[0].lines[0].align = "center";
+          p.zones[0].lines[0].scrollSpeed = 1.0f;
+          p.zones[0].lines[0].marginTop = 0;
+          p.zones[0].lines[0].marginBottom = 2;
+        }
+        _overridePages.push_back(p);
+      }
+      _overrideActive = true;
+      _overridePageIndex = 0;
+      _overridePageChangeTime = millis();
+      log_i("[mqtt-cmd] OVERRIDE: %d pages", _overridePages.size());
+    }
+    return;
+  }
+
+  if (strcmp(action, "CLEAR_OVERRIDE") == 0) {
+    _overridePages.clear();
+    _overrideActive = false;
+    _overridePageIndex = 0;
+    _currentPageIndex = 0;
+    _lastPageChangeTime = millis();
+    log_i("[mqtt-cmd] CLEAR_OVERRIDE");
+    if (!_playlist.empty()) {
+      applyCurrentPage();
+    }
+    return;
+  }
+}
+
 // ── Static MQTT callback ──────────────────────────────────────────────────────
 
 void MqttDisplayClient::onMessage(char* topic, byte* payload, unsigned int length) {
   log_i("[mqtt] Received topic: %s", topic);
-  if (_instance) _instance->handleMessage(payload, length);
+  if (_instance) {
+    _instance->_lastTopic = String(topic);
+    _instance->handleMessage(payload, length);
+  }
 }
 
 void MqttDisplayClient::handleMessage(uint8_t* payload, unsigned int len) {
+  // Route by topic
+  if (_lastTopic == "freq/display/discover") {
+    handleDiscover();
+    return;
+  }
+  if (_lastTopic == _cmdTopic) {
+    handleCmdMessage(payload, len);
+    return;
+  }
+
   JsonDocument doc;
   DeserializationError error = deserializeJson(doc, payload, len);
   if (error) {
@@ -263,6 +402,15 @@ void MqttDisplayClient::handleMessage(uint8_t* payload, unsigned int len) {
   }
   if (doc["scroll_speed"].is<uint16_t>()) {
     _driver.setScrollSpeed(doc["scroll_speed"].as<uint16_t>());
+  }
+
+  if (doc["courtId"].is<const char*>()) {
+    const char* newId = doc["courtId"];
+    if (strcmp(newId, _courtId.c_str()) != 0 && _courtChangeCb) {
+      log_i("[mqtt] Court ID change requested: '%s' -> '%s'", _courtId.c_str(), newId);
+      _courtChangeCb(newId);
+      return;
+    }
   }
 
   JsonArray pages = doc["display"]["pages"];
