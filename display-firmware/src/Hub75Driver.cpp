@@ -111,10 +111,17 @@ void Hub75Driver::begin() {
                 ok ? "OK" : "FAILED", WF2_PANEL_W, WF2_PANEL_H, WF2_CHAIN);
   if (!ok) { delete _matrix; _matrix = nullptr; return; }
   _matrix->setBrightness8(153);
-  uint16_t red = _matrix->color565(255, 0, 0);
-  _matrix->fillScreen(red);
-  delay(2000);
+  uint16_t green = _matrix->color565(0, 255, 0);
+  _matrix->fillScreen(green);
+  _matrix->flipDMABuffer();
+  delay(500);
   _matrix->clearScreen();
+  _matrix->flipDMABuffer();
+  int tw = textWidth5x7Scaled("FREQ", 2);
+  int x = (WF2_RES_X - tw) / 2;
+  int y = (WF2_RES_Y - CHAR_H * 2) / 2;
+  drawText5x7Scaled("FREQ", x, y, green, 2, 0, WF2_RES_X);
+  _matrix->flipDMABuffer();
 }
 
 void Hub75Driver::clear() {
