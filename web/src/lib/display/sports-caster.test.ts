@@ -72,10 +72,10 @@ describe('Sports Caster Payload Generator', () => {
 
     const zone = payload.display.pages[0].zones?.[0];
     expect(zone).toBeDefined();
-    expect(zone!.lines[0].subpages[0].scrollSpeed).toBe(2);
+    expect(zone!.lines[0].subpages![0].scrollSpeed).toBe(2);
     expect(zone!.lines[0].marginTop).toBe(1);
     expect(zone!.lines[0].marginBottom).toBe(3);
-    expect(zone!.lines[0].subpages[0].align).toBe('left');
+    expect(zone!.lines[0].subpages![0].align).toBe('left');
   });
 
   it('substitutes nextWait and nextBookedTime in custom sequences', () => {
