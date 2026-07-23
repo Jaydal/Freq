@@ -73,7 +73,7 @@ export default async function DashboardPage() {
       {/* Greetings section */}
       <div>
         <h1 className="text-3xl font-extrabold tracking-tight text-zinc-150">Welcome, Admin</h1>
-        <p className="text-sm text-zinc-500 mt-1">Here is a summary of Freq Pickleball Club's operations today.</p>
+        <p className="text-sm text-zinc-500 mt-1">Here is a summary of Paddle Point's operations today.</p>
       </div>
 
       {/* KPI Overview Widgets */}

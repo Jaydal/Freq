@@ -35,7 +35,7 @@ export async function GET(
       const prepTimeSec = isNaN(rawPrep) ? 300 : rawPrep;
 
       display = generatePayload(courtId, {
-        current: { name: game.match_title ?? `${game.match_type} · ${game.duration}min`, startTime: game.start_time, durationMinutes: game.duration },
+        current: { name: game.match_title ?? '', startTime: game.start_time, durationMinutes: game.duration },
         upcoming: []
       });
       gameInfo = { startTime: game.start_time, duration: game.duration, prepTimeSec };

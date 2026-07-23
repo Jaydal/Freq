@@ -180,7 +180,7 @@ export function TerminalKiosk() {
       if (!cfg.enabled || cancelled) return;
       mqttClient = mqtt.connect(cfg.url, {
         username: cfg.username, password: cfg.password,
-        clientId: `freq-kiosk-web-${crypto.randomUUID().slice(0, 8)}`,
+        clientId: `paddle-point-kiosk-${crypto.randomUUID().slice(0, 8)}`,
         reconnectPeriod: 5000,
       });
       mqttClient.on('connect', () => mqttClient!.subscribe(cfg.topic));

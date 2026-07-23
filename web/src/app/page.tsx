@@ -22,7 +22,7 @@ function CourtIllustration() {
       <rect x="120" y="20" width="160" height="220" stroke="white" strokeWidth="1" fill="none" />
       <rect x="20" y="100" width="80" height="60" rx="4" fill="#1b4332" stroke="white" strokeWidth="1" />
       <rect x="300" y="100" width="80" height="60" rx="4" fill="#1b4332" stroke="white" strokeWidth="1" />
-      <text x="200" y="115" textAnchor="middle" fill="white" fontSize="11" fontFamily="system-ui">PICKLE</text>
+      <text x="200" y="115" textAnchor="middle" fill="white" fontSize="11" fontFamily="system-ui">PADDLE</text>
       <text x="200" y="132" textAnchor="middle" fill="white" fontSize="11" fontFamily="system-ui">POINT</text>
     </svg>
   );
@@ -41,15 +41,15 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
     <div className="flex flex-col min-h-screen">
       <header className="px-6 py-4 flex justify-between items-center bg-white/80 backdrop-blur border-b sticky top-0 z-10">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-green-700 rounded-lg flex items-center justify-center text-white text-xs font-bold">PP</div>
+          <div className="w-8 h-8 bg-sky-700 rounded-lg flex items-center justify-center text-white text-xs font-bold">PP</div>
           <div>
-            <div className="text-lg font-bold text-green-800 leading-tight">Pickle Point</div>
-            <div className="text-xs text-green-600 leading-tight">Pickle Ball Court</div>
+            <div className="text-lg font-bold text-sky-800 leading-tight">Paddle Point</div>
+            <div className="text-xs text-sky-600 leading-tight">Solano, Nueva Vizcaya</div>
           </div>
         </div>
         <nav className="flex gap-4 items-center">
           <Link href="/terminal">
-            <Button variant="outline" className="border-green-400 text-green-700 hover:bg-green-50">
+            <Button variant="outline" className="border-sky-400 text-sky-700 hover:bg-sky-50">
               Book Now
             </Button>
           </Link>
@@ -60,27 +60,27 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
       </header>
 
       <main className="flex-1">
-        <section className="py-16 md:py-24 px-4 bg-gradient-to-br from-green-900 via-green-800 to-emerald-900 text-white overflow-hidden">
+        <section className="py-16 md:py-24 px-4 bg-gradient-to-br from-sky-900 via-sky-800 to-emerald-900 text-white overflow-hidden">
           <div className="max-w-6xl mx-auto grid md:grid-cols-2 gap-12 items-center">
             <div className="space-y-6">
-              <div className="inline-block px-3 py-1 bg-green-500/20 text-green-300 text-sm rounded-full border border-green-500/30">
-                3 Outdoor Courts &bull; Open Daily
+              <div className="inline-block px-3 py-1 bg-sky-500/20 text-sky-200 text-sm rounded-full border border-sky-500/30">
+                Solano, Nueva Vizcaya &bull; 3 Outdoor Courts &bull; Open Daily
               </div>
               <h1 className="text-5xl md:text-6xl font-extrabold tracking-tight leading-tight">
-                Your Next <span className="text-green-300">Pickle Ball</span> Game
-                <span className="block text-3xl md:text-4xl font-semibold text-green-200/80">Starts Here</span>
+                Your Next <span className="text-emerald-300">Pickle Ball</span> Game
+                <span className="block text-3xl md:text-4xl font-semibold text-sky-200/80">Starts Here</span>
               </h1>
-              <p className="text-lg md:text-xl text-green-100/80 max-w-lg">
+              <p className="text-lg md:text-xl text-sky-100/80 max-w-lg">
                 Premium outdoor pickle ball courts with self-service kiosk, RFID tap-in access, and live queue management.
               </p>
               <div className="flex flex-col sm:flex-row gap-4 pt-2">
                 <Link href="/terminal">
-                  <Button size="lg" className="px-10 py-6 text-lg bg-green-400 text-green-900 hover:bg-green-300 font-semibold">
+                  <Button size="lg" className="px-10 py-6 text-lg bg-sky-400 text-sky-950 hover:bg-sky-300 font-semibold">
                     Book a Court Now
                   </Button>
                 </Link>
                 <Link href="#how-it-works">
-                  <Button size="lg" variant="outline" className="px-10 py-6 text-lg border-green-400 text-green-200 hover:bg-green-700/50">
+                  <Button size="lg" variant="outline" className="px-10 py-6 text-lg border-sky-400 text-sky-200 hover:bg-sky-700/50">
                     How It Works
                   </Button>
                 </Link>
@@ -137,8 +137,8 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
 
         <section className="py-16 px-4 bg-gray-50">
           <div className="max-w-6xl mx-auto grid md:grid-cols-3 gap-8">
-            <div className="bg-white rounded-xl shadow-sm border border-green-100 overflow-hidden">
-              <div className="h-48 bg-gradient-to-br from-green-600 to-emerald-700 flex items-center justify-center">
+            <div className="bg-white rounded-xl shadow-sm border border-sky-100 overflow-hidden">
+              <div className="h-48 bg-gradient-to-br from-sky-600 to-emerald-700 flex items-center justify-center">
                 <CourtIllustration />
               </div>
               <div className="p-6 space-y-2">
@@ -146,8 +146,8 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
                 <p className="text-sm text-gray-500">Premium outdoor court with professional-grade surface and LED scoreboard.</p>
               </div>
             </div>
-            <div className="bg-white rounded-xl shadow-sm border border-green-100 overflow-hidden">
-              <div className="h-48 bg-gradient-to-br from-green-600 to-emerald-700 flex items-center justify-center">
+            <div className="bg-white rounded-xl shadow-sm border border-sky-100 overflow-hidden">
+              <div className="h-48 bg-gradient-to-br from-sky-600 to-emerald-700 flex items-center justify-center">
                 <CourtIllustration />
               </div>
               <div className="p-6 space-y-2">
@@ -155,8 +155,8 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
                 <p className="text-sm text-gray-500">Shaded court available for daytime play with adjacent waiting area.</p>
               </div>
             </div>
-            <div className="bg-white rounded-xl shadow-sm border border-green-100 overflow-hidden">
-              <div className="h-48 bg-gradient-to-br from-green-600 to-emerald-700 flex items-center justify-center">
+            <div className="bg-white rounded-xl shadow-sm border border-sky-100 overflow-hidden">
+              <div className="h-48 bg-gradient-to-br from-sky-600 to-emerald-700 flex items-center justify-center">
                 <CourtIllustration />
               </div>
               <div className="p-6 space-y-2">
@@ -169,20 +169,20 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
 
         <section className="py-16 px-4 bg-white">
           <div className="max-w-5xl mx-auto">
-            <h2 className="text-3xl font-bold text-center text-gray-900 mb-12">Why Pickle Point?</h2>
+            <h2 className="text-3xl font-bold text-center text-gray-900 mb-12">Why Paddle Point?</h2>
             <div className="grid md:grid-cols-3 gap-8">
               <div className="text-center space-y-3 p-6">
-                <Target className="w-10 h-10 mx-auto text-green-600" />
+                <Target className="w-10 h-10 mx-auto text-sky-600" />
                 <h3 className="text-xl font-semibold text-gray-900">Self-Service Booking</h3>
                 <p className="text-gray-500 text-sm">Scan your RFID card at the kiosk, pick a time, and start playing. No front desk needed.</p>
               </div>
               <div className="text-center space-y-3 p-6">
-                <BarChart3 className="w-10 h-10 mx-auto text-green-600" />
+                <BarChart3 className="w-10 h-10 mx-auto text-sky-600" />
                 <h3 className="text-xl font-semibold text-gray-900">Real-Time Queue</h3>
                 <p className="text-gray-500 text-sm">See court availability and your position in line live on the lobby display.</p>
               </div>
               <div className="text-center space-y-3 p-6">
-                <CreditCard className="w-10 h-10 mx-auto text-green-600" />
+                <CreditCard className="w-10 h-10 mx-auto text-sky-600" />
                 <h3 className="text-xl font-semibold text-gray-900">Auto Billing</h3>
                 <p className="text-gray-500 text-sm">Pay-per-play with wallet deduction. No cash, no cards — just tap and play.</p>
               </div>
@@ -196,8 +196,8 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
             <p className="text-gray-500">Pay-per-minute rates for one court session. Group rates available for doubles.</p>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {rateEntries.map(([min, price]) => (
-                <div key={min} className="bg-white rounded-xl shadow-sm border border-green-100 p-6 hover:shadow-md transition-shadow">
-                  <div className="text-2xl font-bold text-green-600">₱{price}</div>
+                <div key={min} className="bg-white rounded-xl shadow-sm border border-sky-100 p-6 hover:shadow-md transition-shadow">
+                  <div className="text-2xl font-bold text-sky-600">₱{price}</div>
                   <div className="text-sm text-gray-500 mt-1">{min} min</div>
                 </div>
               ))}
@@ -206,13 +206,13 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
           </div>
         </section>
 
-        <section className="py-16 px-4 bg-green-800 text-white text-center">
+        <section className="py-16 px-4 bg-sky-800 text-white text-center">
           <div className="max-w-2xl mx-auto space-y-6">
             <h2 className="text-3xl font-bold">Ready to Play?</h2>
-            <p className="text-green-200 text-lg">Visit our self-service kiosk at the court or book instantly online.</p>
+            <p className="text-sky-200 text-lg">Visit our self-service kiosk at the court or book instantly online.</p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Link href="/terminal">
-                <Button size="lg" className="px-10 py-6 text-lg bg-green-400 text-green-900 hover:bg-green-300 font-semibold">
+                <Button size="lg" className="px-10 py-6 text-lg bg-sky-400 text-sky-950 hover:bg-sky-300 font-semibold">
                   Book a Court
                 </Button>
               </Link>
@@ -224,11 +224,11 @@ export default async function LandingPage({ searchParams }: { searchParams: Prom
       <footer className="py-8 px-4 text-center text-sm text-gray-400 bg-gray-900">
         <div className="max-w-4xl mx-auto space-y-2">
           <div className="flex items-center justify-center gap-2">
-            <div className="w-6 h-6 bg-green-600 rounded flex items-center justify-center text-white text-[8px] font-bold">PP</div>
-            <span className="font-semibold text-gray-300">Pickle Point</span>
+            <div className="w-6 h-6 bg-sky-600 rounded flex items-center justify-center text-white text-[8px] font-bold">PP</div>
+            <span className="font-semibold text-gray-300">Paddle Point</span>
           </div>
-          <p>Pickle Ball Court &mdash; Open Daily 6:00 AM &ndash; 10:00 PM</p>
-          <p>&copy; {new Date().getFullYear()} Pickle Point. All rights reserved.</p>
+          <p>Solano, Nueva Vizcaya &mdash; Open Daily 6:00 AM &ndash; 10:00 PM</p>
+          <p>&copy; {new Date().getFullYear()} Paddle Point. All rights reserved.</p>
         </div>
       </footer>
     </div>

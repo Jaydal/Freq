@@ -1,4 +1,5 @@
 #include "step_error.h"
+#include "booking_stepper.h"
 #include "../theme/kiosk_theme.h"
 #include <stdlib.h>
 
@@ -6,10 +7,6 @@ typedef struct {
   step_error_cb_t cb;
   void *user_data;
 } error_closure_t;
-
-static void free_closure_cb(lv_event_t *e) {
-  free(lv_event_get_user_data(e));
-}
 
 static void run_cb(lv_event_t *e) {
   error_closure_t *c = lv_event_get_user_data(e);

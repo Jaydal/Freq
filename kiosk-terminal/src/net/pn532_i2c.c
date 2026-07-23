@@ -1,5 +1,7 @@
 #include "pn532_i2c.h"
 #include "driver/i2c.h"
+#include "driver/gpio.h"
+#include "driver/uart.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_log.h"
@@ -11,6 +13,8 @@
 #define PN532_ADDR 0x24
 #define PN532_SDA_PIN 43
 #define PN532_SCL_PIN 44
+#define PN532_POLL_MS 500
+#define PN532_INIT_RETRY_MS 2000
 
 static const char *TAG = "pn532";
 static bool s_pn532_online = false;
@@ -18,6 +22,12 @@ static bool s_pn532_online = false;
 bool pn532_is_online(void) {
     return s_pn532_online;
 }
+
+static void pn532_set_offline(void) {
+    s_pn532_online = false;
+}
+
+static esp_err_t pn532_init_i2c_bus(void);
 
 static bool pn532_is_ready(void) {
     uint8_t status = 0;
@@ -113,87 +123,163 @@ static bool pn532_read_response(uint8_t *resp, uint8_t *resp_len, uint8_t max_le
 static void pn532_task(void *arg) {
     (void)arg;
     ESP_LOGI(TAG, "PN532 task started");
-    
+
     uint8_t resp[16];
     uint8_t rlen;
+    int init_fail_count = 0;
+    int scan_fail_count = 0;
 
-    // Retry initialization until successful
+    /* ── Initialisation loop ────────────────────────────────── */
     while (1) {
-        // Wake up the PN532 (it starts in low power mode)
+        /* Wake the PN532 from low-power mode with a dummy read.
+         * Check the return value; if it fails, the chip probably isn't
+         * powered or the I2C bus is misconfigured. */
         uint8_t dummy = 0;
-        i2c_master_read_from_device(I2C_PORT, PN532_ADDR, &dummy, 1, pdMS_TO_TICKS(10));
-        vTaskDelay(pdMS_TO_TICKS(50)); // Wait for chip to fully wake up
+        esp_err_t wake_err = i2c_master_read_from_device(I2C_PORT, PN532_ADDR,
+                                                          &dummy, 1, pdMS_TO_TICKS(10));
+        vTaskDelay(pdMS_TO_TICKS(50));
 
-        // 1. Get Firmware Version (0x02) to verify connection
-        uint8_t fw_cmd[] = {0x02};
-        if (!pn532_send_command(fw_cmd, sizeof(fw_cmd)) || !pn532_read_ack()) {
-            ESP_LOGE(TAG, "Failed to get Firmware Version. Retrying in 2s...");
-            vTaskDelay(pdMS_TO_TICKS(2000));
+        if (wake_err != ESP_OK) {
+            init_fail_count++;
+            ESP_LOGE(TAG, "Wake I2C read failed (%d/%d), retrying in 2s...",
+                     init_fail_count, 5);
+            if (init_fail_count >= 5) {
+                ESP_LOGW(TAG, "Too many init failures — reinitialising I2C bus");
+                pn532_init_i2c_bus();
+                init_fail_count = 0;
+            }
+            vTaskDelay(pdMS_TO_TICKS(PN532_INIT_RETRY_MS));
             continue;
         }
-        pn532_read_response(resp, &rlen, sizeof(resp));
-        if (rlen >= 4) {
+
+        /* 1. Get Firmware Version (0x02) to verify the chip is alive. */
+        uint8_t fw_cmd[] = {0x02};
+        if (!pn532_send_command(fw_cmd, sizeof(fw_cmd)) || !pn532_read_ack()) {
+            ESP_LOGE(TAG, "Firmware version request failed, retrying...");
+            vTaskDelay(pdMS_TO_TICKS(PN532_INIT_RETRY_MS));
+            continue;
+        }
+        if (pn532_read_response(resp, &rlen, sizeof(resp)) && rlen >= 4) {
             ESP_LOGI(TAG, "Found PN5%02X! Firmware v%d.%d", resp[0], resp[1], resp[2]);
         }
 
-        // 2. SAM configuration
-        // Normal mode, timeout 0x02 (100ms), NO IRQ
-        uint8_t sam_cmd[] = {0x14, 0x01, 0x02, 0x00}; 
+        /* 2. SAM Configuration — normal mode, timeout 50 ms, no IRQ. */
+        uint8_t sam_cmd[] = {0x14, 0x01, 0x01, 0x00};
         if (pn532_send_command(sam_cmd, sizeof(sam_cmd)) && pn532_read_ack()) {
             pn532_read_response(resp, &rlen, sizeof(resp));
             ESP_LOGI(TAG, "PN532 SAM configured successfully");
             break;
         }
-        
-        ESP_LOGE(TAG, "Failed to configure SAM. Retrying in 2s...");
-        vTaskDelay(pdMS_TO_TICKS(2000));
+
+        ESP_LOGE(TAG, "SAM configuration failed, retrying...");
+        vTaskDelay(pdMS_TO_TICKS(PN532_INIT_RETRY_MS));
     }
-    
+
+    s_pn532_online = true;
+    init_fail_count = 0;
+
+    /* ── Main scan loop ─────────────────────────────────────── */
     uint32_t last_scan = 0;
-    
-    while(1) {
-        vTaskDelay(pdMS_TO_TICKS(500));
-        
-        uint8_t poll_cmd[] = {0x4A, 0x01, 0x00}; // Max 1 target, Baud 106 kbps (Type A)
-        if (!pn532_send_command(poll_cmd, sizeof(poll_cmd))) continue;
-        if (!pn532_read_ack()) continue;
-        
-        // Give it plenty of time (1500ms) to scan
-        bool is_ready_now = pn532_wait_ready(1500);
-        
-        if (!is_ready_now) {
-            // If it timed out, maybe no card was found or chip is busy.
-            // Don't mark offline unless it fails to acknowledge I2C entirely.
-            uint8_t dummy;
-            s_pn532_online = (i2c_master_read_from_device(I2C_PORT, PN532_ADDR, &dummy, 1, pdMS_TO_TICKS(10)) == ESP_OK);
-            continue;
-        } else {
-            s_pn532_online = true;
+
+    while (1) {
+        vTaskDelay(pdMS_TO_TICKS(PN532_POLL_MS));
+
+        uint8_t poll_cmd[] = {0x4A, 0x01, 0x00}; /* Max 1 target, 106 kbps (Type A) */
+        if (!pn532_send_command(poll_cmd, sizeof(poll_cmd))) {
+            scan_fail_count++;
+            goto check_health;
         }
-        
-        if (is_ready_now) {
-            if (pn532_read_response(resp, &rlen, sizeof(resp))) {
-                if (rlen >= 2 && resp[0] == 0x4B && resp[1] == 1) {
-                    uint8_t uid_len = resp[6];
-                    if (uid_len > 0 && uid_len <= 10 && (7 + uid_len <= rlen)) {
-                        char hex_str[32] = {0};
-                        for (int i = 0; i < uid_len; i++) {
-                            sprintf(&hex_str[i * 2], "%02X", resp[7 + i]);
-                        }
-                        
-                        if ((xTaskGetTickCount() * portTICK_PERIOD_MS) - last_scan > 3000) {
-                            ESP_LOGI(TAG, "Scanned NFC: %s", hex_str);
-                            ui_app_handle_scan(hex_str);
-                            last_scan = xTaskGetTickCount() * portTICK_PERIOD_MS;
-                        }
+        if (!pn532_read_ack()) {
+            scan_fail_count++;
+            goto check_health;
+        }
+
+        /* Give the chip up to 1500 ms to detect a card. */
+        bool card_present = pn532_wait_ready(1500);
+
+        if (!card_present) {
+            /* No card this cycle — verify chip is still alive on I2C. */
+            uint8_t alive_check;
+            esp_err_t alive = i2c_master_read_from_device(I2C_PORT, PN532_ADDR,
+                                                           &alive_check, 1, pdMS_TO_TICKS(10));
+            if (alive != ESP_OK) {
+                scan_fail_count++;
+                pn532_set_offline();
+            } else {
+                scan_fail_count = 0;
+                s_pn532_online = true;
+            }
+            goto check_health;
+        }
+
+        /* Card detected — reset fail counter and read the UID. */
+        scan_fail_count = 0;
+        s_pn532_online = true;
+
+        if (pn532_read_response(resp, &rlen, sizeof(resp))) {
+            if (rlen >= 2 && resp[0] == 0x4B && resp[1] == 1) {
+                uint8_t uid_len = resp[6];
+                if (uid_len > 0 && uid_len <= 10 && (7 + uid_len <= rlen)) {
+                    char hex_str[32] = {0};
+                    for (int i = 0; i < uid_len; i++) {
+                        sprintf(&hex_str[i * 2], "%02X", resp[7 + i]);
                     }
+                    uint32_t now = xTaskGetTickCount() * portTICK_PERIOD_MS;
+                    if (now - last_scan > 3000) {
+                        ESP_LOGI(TAG, "Scanned NFC: %s", hex_str);
+                        ui_app_handle_scan(hex_str);
+                        last_scan = now;
+                    }
+                }
+            }
+        }
+
+    check_health:
+        /* If the chip has failed 10+ consecutive scans, try re-initialising
+         * the I2C bus (maybe the PN532 locked up or was power-cycled). */
+        if (scan_fail_count >= 10) {
+            ESP_LOGW(TAG, "%d consecutive scan failures — reinitialising I2C bus",
+                     scan_fail_count);
+            pn532_set_offline();
+            pn532_init_i2c_bus();
+            vTaskDelay(pdMS_TO_TICKS(100));
+            /* Re-enter the initialisation loop by breaking out of scan.
+             * After init succeeds, we'll return to the scan loop. */
+            /* The init loop will set s_pn532_online = true on success. */
+            scan_fail_count = 0;
+
+            /* Jump back to init loop */
+            uint8_t dummy;
+            for (int attempt = 0; attempt < 30; attempt++) {
+                vTaskDelay(pdMS_TO_TICKS(100));
+                esp_err_t w = i2c_master_read_from_device(I2C_PORT, PN532_ADDR,
+                                                          &dummy, 1, pdMS_TO_TICKS(10));
+                if (w == ESP_OK) break;
+            }
+
+            uint8_t fw_cmd[] = {0x02};
+            if (pn532_send_command(fw_cmd, sizeof(fw_cmd)) && pn532_read_ack()) {
+                if (pn532_read_response(resp, &rlen, sizeof(resp)) && rlen >= 4) {
+                    ESP_LOGI(TAG, "PN532 recovered! FW v%d.%d", resp[1], resp[2]);
+                }
+                uint8_t sam_cmd[] = {0x14, 0x01, 0x01, 0x00};
+                if (pn532_send_command(sam_cmd, sizeof(sam_cmd)) && pn532_read_ack()) {
+                    ESP_LOGI(TAG, "PN532 SAM re-configured");
+                    s_pn532_online = true;
                 }
             }
         }
     }
 }
 
-void pn532_start_task(void) {
+static esp_err_t pn532_init_i2c_bus(void) {
+    /* Release UART2 if it was previously configured on these pins.
+     * The ESP32-S3 bootloader may leave UART2 active on GPIO 43/44,
+     * which prevents I2C from claiming the pins. */
+    uart_driver_delete(UART_NUM_2);
+    gpio_reset_pin(PN532_SDA_PIN);
+    gpio_reset_pin(PN532_SCL_PIN);
+
     const i2c_config_t cfg = {
         .mode             = I2C_MODE_MASTER,
         .sda_io_num       = PN532_SDA_PIN,
@@ -202,9 +288,18 @@ void pn532_start_task(void) {
         .scl_pullup_en    = GPIO_PULLUP_ENABLE,
         .master.clk_speed = 100000,
     };
-    ESP_ERROR_CHECK(i2c_param_config(I2C_PORT, &cfg));
-    ESP_ERROR_CHECK(i2c_driver_install(I2C_PORT, I2C_MODE_MASTER, 0, 0, 0));
-    ESP_LOGI(TAG, "Initialized independent I2C bus on SDA=%d, SCL=%d for PN532", PN532_SDA_PIN, PN532_SCL_PIN);
+
+    /* Deinit first in case the bus was already installed (e.g. after a crash/retry). */
+    i2c_driver_delete(I2C_PORT);
+    esp_err_t err = i2c_param_config(I2C_PORT, &cfg);
+    if (err != ESP_OK) return err;
+    return i2c_driver_install(I2C_PORT, I2C_MODE_MASTER, 0, 0, 0);
+}
+
+void pn532_start_task(void) {
+    /* Init I2C bus before creating the task so we fail fast on obvious config errors. */
+    ESP_ERROR_CHECK(pn532_init_i2c_bus());
+    ESP_LOGI(TAG, "I2C bus ready on SDA=%d, SCL=%d", PN532_SDA_PIN, PN532_SCL_PIN);
 
     xTaskCreate(pn532_task, "pn532", 4096, NULL, 4, NULL);
 }

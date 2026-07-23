@@ -12,6 +12,10 @@ struct ZoneLine {
   std::string text;
   std::string color;
   std::string effect;
+  std::string align;
+  float scrollSpeed;
+  uint8_t marginTop;
+  uint8_t marginBottom;
 };
 
 struct DisplayZone {
@@ -19,6 +23,10 @@ struct DisplayZone {
   uint8_t panelEnd;
   ZoneLine lines[2];
   uint8_t lineCount;
+  uint8_t borderCount;
+  uint8_t scale;
+  std::string valign;
+  BorderRange borderRanges[4];
 };
 
 struct DisplayPage {

@@ -17,7 +17,10 @@ export interface DisplayPage {
   zones?: {
     panelStart: number;
     panelEnd: number;
-    lines: { text: string; color: string; effect: string }[];
+    borderRows?: { start: number; end: number }[];
+    scale?: number;
+    valign?: string;
+    lines: { text: string; color: string; effect: string; align?: string; scrollSpeed?: number; marginTop?: number; marginBottom?: number }[];
   }[];
 }
 
@@ -60,7 +63,7 @@ export async function connectMqtt(): Promise<MqttClient | null> {
 
   if (!g._mqttClient) {
     g._mqttClient = mqtt.connect(url, {
-      clientId: `freq-web-${crypto.randomUUID().slice(0, 12)}`,
+      clientId: `paddle-point-web-${crypto.randomUUID().slice(0, 12)}`,
       reconnectPeriod: 5000,
       connectTimeout: 5000,
       username: process.env.MQTT_USERNAME,

@@ -2,12 +2,19 @@ export interface DisplayLine {
   text: string;
   color: string;
   effect: 'SCROLL' | 'STATIC' | 'BLINK' | 'paginate';
+  align?: 'left' | 'center' | 'right';
+  scrollSpeed?: number;
+  marginTop?: number;
+  marginBottom?: number;
 }
 
 export interface DisplayZone {
   panelStart: number;
   panelEnd: number;
   lines: DisplayLine[];
+  borderRows?: { start: number; end: number }[];
+  scale?: number;
+  valign?: 'top' | 'middle' | 'bottom';
 }
 
 export interface ZonePage {

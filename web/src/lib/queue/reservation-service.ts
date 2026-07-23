@@ -97,7 +97,7 @@ export async function finalizeBooking(entryId: string): Promise<{ success: boole
   const entryMatchType = entry.party_size === 4 ? '2v2' : '1v1';
   await publishDisplay(entry.court_id, generatePayload(entry.court_id, {
     current: {
-      name: entry.match_title || entryMatchType,
+      name: entry.match_title || '',
       startTime: gameData?.start_time || new Date().toISOString(),
       durationMinutes: entry.duration,
       matchTitle: entry.match_title || '',

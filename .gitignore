@@ -32,3 +32,5 @@ test.txt
 test-rfid.js
 *.local
 .DS_Store
+build/
+monorepo_review.diff

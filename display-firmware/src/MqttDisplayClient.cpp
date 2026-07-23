@@ -147,6 +147,12 @@ void MqttDisplayClient::applyCurrentPage() {
     rz[zi].panelStart = page.zones[zi].panelStart;
     rz[zi].panelEnd = page.zones[zi].panelEnd;
     rz[zi].lineCount = page.zones[zi].lineCount;
+    rz[zi].scale = page.zones[zi].scale;
+    rz[zi].valign = page.zones[zi].valign.c_str();
+    rz[zi].borderCount = page.zones[zi].borderCount;
+    for (int bri = 0; bri < page.zones[zi].borderCount && bri < 4; bri++) {
+      rz[zi].borderRanges[bri] = page.zones[zi].borderRanges[bri];
+    }
 
     for (int li = 0; li < page.zones[zi].lineCount && li < 2; li++) {
       const auto& srcLine = page.zones[zi].lines[li];
@@ -157,6 +163,10 @@ void MqttDisplayClient::applyCurrentPage() {
       rz[zi].lines[li].g = g;
       rz[zi].lines[li].b = b;
       rz[zi].lines[li].effect = srcLine.effect.c_str();
+      rz[zi].lines[li].align = srcLine.align.c_str();
+      rz[zi].lines[li].scrollSpeed = srcLine.scrollSpeed;
+      rz[zi].lines[li].marginTop = srcLine.marginTop;
+      rz[zi].lines[li].marginBottom = srcLine.marginBottom;
     }
   }
 
@@ -268,9 +278,16 @@ void MqttDisplayClient::handleMessage(uint8_t* payload, unsigned int len) {
       p.zones[0].panelStart = 0;
       p.zones[0].panelEnd = 2;
       p.zones[0].lineCount = 1;
+      p.zones[0].borderCount = 0;
+      p.zones[0].scale = 0;
+      p.zones[0].valign = "middle";
       p.zones[0].lines[0].text = msg;
       p.zones[0].lines[0].color = doc["color"] | "#FFFFFF";
       p.zones[0].lines[0].effect = doc["animation"] | "SCROLL";
+      p.zones[0].lines[0].align = "center";
+      p.zones[0].lines[0].scrollSpeed = 1.0f;
+      p.zones[0].lines[0].marginTop = 0;
+      p.zones[0].lines[0].marginBottom = 2;
       _playlist.push_back(p);
     }
   } else {
@@ -287,6 +304,19 @@ void MqttDisplayClient::handleMessage(uint8_t* payload, unsigned int len) {
           z.panelStart = zone["panelStart"] | 0;
           z.panelEnd = zone["panelEnd"] | 2;
           z.lineCount = 0;
+          z.borderCount = 0;
+          z.scale = zone["scale"] | 0;
+          z.valign = zone["valign"] | "";
+
+          JsonArray borderArr = zone["borderRows"];
+          if (!borderArr.isNull()) {
+            for (JsonObject br : borderArr) {
+              if (z.borderCount >= 4) break;
+              z.borderRanges[z.borderCount].start = br["start"] | 0;
+              z.borderRanges[z.borderCount].end = br["end"] | 0;
+              z.borderCount++;
+            }
+          }
 
           JsonArray lines = zone["lines"];
           if (!lines.isNull()) {
@@ -295,6 +325,10 @@ void MqttDisplayClient::handleMessage(uint8_t* payload, unsigned int len) {
               z.lines[z.lineCount].text = line["text"] | "";
               z.lines[z.lineCount].color = line["color"] | "#FFFFFF";
               z.lines[z.lineCount].effect = line["effect"] | "SCROLL";
+              z.lines[z.lineCount].align = line["align"] | "center";
+              z.lines[z.lineCount].scrollSpeed = line["scrollSpeed"].is<float>() ? line["scrollSpeed"].as<float>() : 1.0f;
+              z.lines[z.lineCount].marginTop = line["marginTop"] | 0;
+              z.lines[z.lineCount].marginBottom = line["marginBottom"] | 2;
               z.lineCount++;
             }
           }
@@ -306,9 +340,16 @@ void MqttDisplayClient::handleMessage(uint8_t* payload, unsigned int len) {
         z.panelStart = 0;
         z.panelEnd = 2;
         z.lineCount = 1;
+        z.borderCount = 0;
+        z.scale = 0;
+        z.valign = "middle";
         z.lines[0].text = page["text"] | "";
         z.lines[0].color = page["color"] | "#FFFFFF";
         z.lines[0].effect = page["effect"] | "SCROLL";
+        z.lines[0].align = "center";
+        z.lines[0].scrollSpeed = 1.0f;
+        z.lines[0].marginTop = 0;
+        z.lines[0].marginBottom = 2;
         p.zoneCount = 1;
       }
 

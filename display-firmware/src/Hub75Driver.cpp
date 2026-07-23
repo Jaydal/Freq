@@ -80,11 +80,18 @@ static int glyphIndex(char c) {
   return -1;
 }
 
+// isBorderRow removed to optimize per-pixel loop
+
 Hub75Driver::Hub75Driver()
   : _matrix(nullptr), _defaultColor(0xF800), _scrollTickMs(45), _animMode("scroll"),
     _zoneCount(0), _fallbackScrollX(0), _fallbackScrollTick(0)
 {
-  for (int i = 0; i < MAX_ZONES; i++) _zones[i].hasData = false;
+  for (int i = 0; i < MAX_ZONES; i++) {
+    _zones[i].hasData = false;
+    _zones[i].scale = 0;
+    _zones[i].valign = "";
+    _zones[i].borderCount = 0;
+  }
 }
 
 void Hub75Driver::begin() {
@@ -106,6 +113,7 @@ void Hub75Driver::begin() {
 
 void Hub75Driver::clear() {
   _zoneCount = 0;
+  for (int i = 0; i < MAX_ZONES; i++) _zones[i].hasData = false;
   _fallbackText = "";
   _fallbackScrollX = 0;
   if (_matrix) _matrix->clearScreen();
@@ -126,11 +134,18 @@ void Hub75Driver::showRow(uint8_t row, const char* text) {
   z.panelEnd = 2;
   z.lineCount = 1;
   z.hasData = true;
+  z.borderCount = 0;
+  z.scale = 0;
+  z.valign = "middle";
   z.lines[0].text = text;
   z.lines[0].color = _defaultColor;
-  z.lines[0].effect = _animMode;
+  z.lines[0].effect = (_animMode == "scroll") ? "SCROLL" : _animMode;
+  z.lines[0].align = "center";
   z.lines[0].scrollX = (w > WF2_RES_X) ? WF2_RES_X : 0;
   z.lines[0].scrollLastTick = millis();
+  z.lines[0].scrollSpeed = 1;
+  z.lines[0].marginTop = 0;
+  z.lines[0].marginBottom = 2;
   _zoneCount = 1;
 
   redraw();
@@ -165,20 +180,27 @@ void Hub75Driver::setZones(const ZoneRenderInfo* zones, uint8_t count) {
     dst.panelEnd = src.panelEnd;
     dst.lineCount = src.lineCount;
     dst.hasData = true;
+    dst.borderCount = src.borderCount;
+    for (uint8_t bi = 0; bi < src.borderCount && bi < MAX_BORDER_RANGES; bi++) {
+      dst.borderRanges[bi] = src.borderRanges[bi];
+    }
+    dst.scale = src.scale;
+    dst.valign = src.valign;
 
     for (int li = 0; li < src.lineCount && li < MAX_LINES_PER_ZONE; li++) {
       dst.lines[li].text = src.lines[li].text;
       dst.lines[li].color = _matrix ? _matrix->color565(src.lines[li].r, src.lines[li].g, src.lines[li].b) : 0xF800;
       dst.lines[li].effect = src.lines[li].effect;
+      dst.lines[li].align = src.lines[li].align;
+      dst.lines[li].scrollSpeed = src.lines[li].scrollSpeed;
+      dst.lines[li].marginTop = src.lines[li].marginTop;
+      dst.lines[li].marginBottom = src.lines[li].marginBottom;
 
       int zoneW = (src.panelEnd - src.panelStart + 1) * WF2_PANEL_W;
-      int scale = (src.lineCount == 2) ? 1 : 2;
-      int tw = textWidth5x7Scaled(src.lines[li].text.c_str(), scale);
-      if (tw > zoneW || src.lines[li].effect == "SCROLL") {
-        dst.lines[li].scrollX = zoneW;
-      } else {
-        dst.lines[li].scrollX = 0;
-      }
+      int s = (src.lineCount == 2) ? 1 : 2;
+      if (dst.scale > 0) s = dst.scale;
+      int tw = textWidth5x7Scaled(src.lines[li].text.c_str(), s);
+      dst.lines[li].scrollX = (tw > zoneW && src.lines[li].effect == "SCROLL") ? zoneW : 0;
       dst.lines[li].scrollLastTick = millis();
     }
   }
@@ -226,18 +248,20 @@ void Hub75Driver::update() {
 
     for (int li = 0; li < z.lineCount; li++) {
       auto& line = z.lines[li];
-      if (line.effect != "SCROLL") continue;
       if (line.text.length() == 0) continue;
 
-      int scale = (z.lineCount == 2) ? 1 : 2;
-      int tw = textWidth5x7Scaled(line.text.c_str(), scale);
-      if (tw <= zoneW) continue;
+      int scale = z.scale > 0 ? z.scale : ((z.lineCount == 2) ? 1 : 2);
 
-      if (now - line.scrollLastTick >= _scrollTickMs) {
-        line.scrollLastTick = now;
-        line.scrollX -= 1;
-        if (line.scrollX + tw <= 0) line.scrollX = zoneW + SCROLL_WRAP_PAD;
-        needsRedraw = true;
+      if (line.effect == "SCROLL") {
+        int tw = textWidth5x7Scaled(line.text.c_str(), scale);
+        if (tw <= zoneW) continue;
+        float speed = line.scrollSpeed > 0.0f ? line.scrollSpeed : 1.0f;
+        if (now - line.scrollLastTick >= (unsigned long)(_scrollTickMs / speed)) {
+          line.scrollLastTick = now;
+          line.scrollX -= 1;
+          if (line.scrollX + tw <= 0) line.scrollX = zoneW + SCROLL_WRAP_PAD;
+          needsRedraw = true;
+        }
       }
     }
   }
@@ -289,31 +313,83 @@ void Hub75Driver::redraw() {
     int zoneX = z.panelStart * WF2_PANEL_W;
     int zoneW = (z.panelEnd - z.panelStart + 1) * WF2_PANEL_W;
     int zoneXEnd = zoneX + zoneW;
-    bool isTwoLine = (z.lineCount == 2);
-    int scale = isTwoLine ? 1 : 2;
-    int charH = CHAR_H * scale;
+
+    // Compute available vertical range (excluding border rows)
+    int availTop = 0;
+    int availBottom = WF2_RES_Y - 1;
+    if (z.borderCount > 0) {
+      for (int y = 0; y < WF2_RES_Y; y++) {
+        if (!isBorderRow(y, z.borderCount, z.borderRanges)) { availTop = y; break; }
+      }
+      for (int y = WF2_RES_Y - 1; y >= 0; y--) {
+        if (!isBorderRow(y, z.borderCount, z.borderRanges)) { availBottom = y; break; }
+      }
+    }
+    int availH = availBottom - availTop + 1;
+
+    // Compute scale per line
+    int scales[MAX_LINES_PER_ZONE];
+    int totalTextH = 0;
+    for (int li = 0; li < z.lineCount; li++) {
+      auto& ln = z.lines[li];
+      if (z.scale > 0) {
+        scales[li] = z.scale;
+      } else if (z.lineCount == 2) {
+        scales[li] = 1;
+      } else if (ln.effect == "SCROLL") {
+        scales[li] = 2;
+      } else {
+        int tw2x = textWidth5x7Scaled(ln.text.c_str(), 2);
+        scales[li] = (tw2x <= zoneW) ? 2 : 1;
+      }
+      int mt = (ln.marginTop > 0 || li > 0) ? (int)ln.marginTop : 0;
+      int mb = (li < z.lineCount - 1) ? (int)ln.marginBottom : 0;
+      totalTextH += mt + CHAR_H * scales[li] + mb;
+    }
+
+    // Compute Y offset for each line based on valign
+    int lineY[MAX_LINES_PER_ZONE];
+    int yo;
+    if (availH <= totalTextH) {
+      yo = availTop;
+    } else if (z.valign == "top") {
+      yo = availTop;
+    } else if (z.valign == "bottom") {
+      yo = availBottom - totalTextH + 1;
+    } else {
+      yo = availTop + (availH - totalTextH) / 2;
+    }
+    for (int li = 0; li < z.lineCount; li++) {
+      auto& ln = z.lines[li];
+      int mt = (ln.marginTop > 0 || li > 0) ? (int)ln.marginTop : 0;
+      yo += mt;
+      lineY[li] = yo;
+      yo += CHAR_H * scales[li] + ((li < z.lineCount - 1) ? (int)ln.marginBottom : 0);
+    }
 
     for (int li = 0; li < z.lineCount; li++) {
       auto& line = z.lines[li];
       String display = substituteTimer(line.text);
+      int scale = scales[li];
 
-      int y;
-      if (isTwoLine) {
-        y = (li == 0) ? 0 : 8;
-      } else {
-        y = 1;
-      }
-
-      bool overflows = textWidth5x7Scaled(display.c_str(), scale) > zoneW || line.effect == "SCROLL";
       int x;
-      if (!overflows || line.effect == "STATIC") {
+      String align = line.align;
+      if (align.length() == 0) align = "center";
+
+      bool overflows = (line.effect == "SCROLL" && textWidth5x7Scaled(display.c_str(), scale) > zoneW);
+      if (overflows) {
+        x = zoneX + line.scrollX;
+      } else if (align == "left") {
+        x = zoneX;
+      } else if (align == "right") {
+        int tw = textWidth5x7Scaled(display.c_str(), scale);
+        x = zoneX + zoneW - tw;
+      } else {
         int tw = textWidth5x7Scaled(display.c_str(), scale);
         x = zoneX + (zoneW - tw) / 2;
-      } else {
-        x = zoneX + line.scrollX;
       }
 
-      drawText5x7Scaled(display.c_str(), x, y, line.color, scale, zoneX, zoneXEnd);
+      drawText5x7Scaled(display.c_str(), x, lineY[li], line.color, scale, zoneX, zoneXEnd, z.borderCount, z.borderRanges);
     }
   }
 
@@ -321,12 +397,17 @@ void Hub75Driver::redraw() {
 }
 
 int Hub75Driver::textWidth5x7Scaled(const char* s, int scale) {
-  int n = 0;
-  for (const char* p = s; *p; p++) n++;
-  return n > 0 ? (n * CHAR_W * scale) + ((n - 1) * SPACING * scale) : 0;
+  int w = 0;
+  bool first = true;
+  for (const char* p = s; *p; p++) {
+    if (!first) w += SPACING * scale;
+    w += (*p == ' ') ? 0 : CHAR_W * scale;
+    first = false;
+  }
+  return w;
 }
 
-void Hub75Driver::drawText5x7Scaled(const char* s, int x, int y, uint16_t color, int scale, int clipXStart, int clipXEnd) {
+void Hub75Driver::drawText5x7Scaled(const char* s, int x, int y, uint16_t color, int scale, int clipXStart, int clipXEnd, uint8_t borderCount, const BorderRange* borderRanges) {
   int cursor = x;
   for (const char* p = s; *p; p++) {
     int idx = glyphIndex(*p);
@@ -340,6 +421,16 @@ void Hub75Driver::drawText5x7Scaled(const char* s, int x, int y, uint16_t color,
               for (int dx = 0; dx < scale; dx++) {
                 int px = cursor + col * scale + dx;
                 int py = y + row * scale + dy;
+                
+                bool isBorder = false;
+                for (uint8_t i = 0; i < borderCount; i++) {
+                  if (py >= borderRanges[i].start && py <= borderRanges[i].end) {
+                    isBorder = true;
+                    break;
+                  }
+                }
+                
+                if (isBorder) continue;
                 if (px >= clipXStart && px < clipXEnd && py >= 0 && py < WF2_RES_Y) {
                   drawPixelMapped(px, py, color);
                 }
@@ -349,17 +440,13 @@ void Hub75Driver::drawText5x7Scaled(const char* s, int x, int y, uint16_t color,
         }
       }
     }
-    cursor += CELL_W * scale;
+    cursor += (*p == ' ') ? SPACING * scale : CELL_W * scale;
   }
 }
 
 void Hub75Driver::drawPixelMapped(int x, int y, uint16_t color) {
   if (x < 0 || x >= WF2_RES_X || y < 0 || y >= WF2_RES_Y) return;
   _matrix->drawPixel(x, y, color);
-}
-
-void Hub75Driver::paginateText(const String& text) {
-  (void)text;
 }
 
 #endif

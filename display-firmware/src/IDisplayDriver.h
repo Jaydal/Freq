@@ -7,6 +7,15 @@ struct ZoneLineRender {
   uint8_t g;
   uint8_t b;
   String effect;
+  String align;
+  float scrollSpeed;
+  uint8_t marginTop;
+  uint8_t marginBottom;
+};
+
+struct BorderRange {
+  uint8_t start;
+  uint8_t end;
 };
 
 struct ZoneRenderInfo {
@@ -14,6 +23,10 @@ struct ZoneRenderInfo {
   uint8_t panelEnd;
   uint8_t lineCount;
   ZoneLineRender lines[2];
+  uint8_t borderCount;
+  BorderRange borderRanges[4];
+  uint8_t scale;
+  String valign;
 };
 
 class IDisplayDriver {

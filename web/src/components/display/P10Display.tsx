@@ -1,20 +1,21 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 
 export interface DisplayPage {
   text: string;
   color?: string;
-  effect?: 'SCROLL' | 'STATIC' | 'BLINK';
+  effect?: 'SCROLL' | 'STATIC' | 'BLINK' | 'paginate';
   durationSeconds?: number;
+  shrink?: boolean;
 }
 
-interface Props {
+export interface P10DisplayProps {
   pages?: DisplayPage[];
   layout?: 'horizontal' | 'vertical';
 }
 
-const FONT: Record<string, number[]> = {
+export const FONT: Record<string, number[]> = {
   'A': [0b01110, 0b10001, 0b10001, 0b11111, 0b10001, 0b10001, 0b10001],
   'B': [0b11110, 0b10001, 0b10001, 0b11110, 0b10001, 0b10001, 0b11110],
   'C': [0b01110, 0b10001, 0b10000, 0b10000, 0b10000, 0b10001, 0b01110],
@@ -59,19 +60,29 @@ const FONT: Record<string, number[]> = {
   '\u00A0': [0b00000, 0b00000, 0b00000, 0b00000, 0b00000, 0b00000, 0b00000],
 };
 
-const CHAR_W = 5;
-const CHAR_H = 7;
-const SPACING = 1;
-const CELL_W = CHAR_W + SPACING;
+export const CHAR_W = 5;
+export const CHAR_H = 7;
+export const SPACING = 1;
+export const CELL_W = CHAR_W + SPACING;
 
-function textWidth(text: string): number { return text.length * CELL_W; }
+function textWidth(text: string): number {
+  let w = 0;
+  let first = true;
+  for (const ch of text) {
+    if (!first) w += SPACING;
+    if (ch !== ' ') w += CHAR_W;
+    first = false;
+  }
+  return w;
+}
 
-function textToDots(text: string, offsetX = 0, offsetY = 0): { x: number; y: number }[] {
+export function textToDots(text: string, offsetX = 0, offsetY = 0): { x: number; y: number }[] {
   const dots: { x: number; y: number }[] = [];
   let cursor = offsetX;
   for (const ch of text) {
+    if (ch === ' ') { cursor += SPACING; continue; }
     const rows = getChar(ch);
-    if (!rows) { cursor += CELL_W; continue; }
+    if (!rows) { cursor += SPACING; continue; }
     for (let row = 0; row < CHAR_H; row++) {
       for (let col = 0; col < CHAR_W; col++) {
         if (rows[row] & (1 << (CHAR_W - 1 - col))) {
@@ -84,7 +95,7 @@ function textToDots(text: string, offsetX = 0, offsetY = 0): { x: number; y: num
   return dots;
 }
 
-function getChar(ch: string): number[] | undefined {
+export function getChar(ch: string): number[] | undefined {
   const u = ch.toUpperCase();
   return FONT[u] ?? (ch === '\u00A0' ? FONT[' '] : undefined);
 }
@@ -96,14 +107,9 @@ function renderPage(page: DisplayPage, panelWidth: number): LineDots {
   const w = textWidth(s);
   const isStatic = page.effect === 'STATIC' && w <= panelWidth;
   const xOff = isStatic ? Math.floor((panelWidth - w) / 2) : 0;
-  
-  // The scale factor is 2, so the actual virtual height is 7 * 2 = 14.
-  // The panel height is 16. So y offset is 1. We don't scale the coordinates here, 
-  // we just scale the SVG group wrapper.
-  // So the unscaled yOff is 1 / 2 = 0.5 (or just 0, it doesn't matter since we center the group).
-  
+
   return {
-    text: s, 
+    text: s,
     width: w,
     color: page.color || '#00FF00',
     effect: page.effect || 'SCROLL',
@@ -153,24 +159,59 @@ function PageGroup({ line, panelWidth }: { line: LineDots; panelWidth: number })
   );
 }
 
-export function P10Display({ pages = [], layout = 'horizontal' }: Props) {
+function chunkText(text: string, maxChars: number): string[] {
+  const chunks: string[] = [];
+  for (let i = 0; i < text.length; i += maxChars) {
+    chunks.push(text.slice(i, i + maxChars));
+  }
+  return chunks.length > 0 ? chunks : [''];
+}
+
+export function P10Display({ pages = [], layout = 'horizontal' }: P10DisplayProps) {
   const isHoriz = layout === 'horizontal';
   const cols = isHoriz ? 64 : 32;
   const rows = isHoriz ? 16 : 32;
 
-  const [idx, setIdx] = useState(0);
+  // Expand paginate pages into sub-pages (each chunk becomes its own page)
+  const expandedPages = useMemo(() => {
+    return pages.flatMap((p) => {
+      if (p.effect !== 'paginate') return [p];
+      const maxChars = Math.floor((cols / 2) / CELL_W);
+      const chunks = chunkText(p.text, maxChars);
+      return chunks.map((chunk) => ({
+        text: chunk,
+        color: p.color,
+        effect: 'STATIC' as const,
+        durationSeconds: 1.5,
+        shrink: p.shrink,
+      }));
+    });
+  }, [pages, cols]);
+
+  const [pageIdx, setPageIdx] = useState(0);
 
   useEffect(() => {
-    if (!pages || pages.length <= 1) return;
-    const dur = (pages[idx]?.durationSeconds || 10) * 1000;
-    const t = setTimeout(() => {
-      setIdx((prev) => (prev + 1) % pages.length);
-    }, dur);
+    if (expandedPages.length <= 1) return;
+    const dur = (expandedPages[pageIdx]?.durationSeconds || 10) * 1000;
+    const t = setTimeout(() => setPageIdx((i) => (i + 1) % expandedPages.length), dur);
     return () => clearTimeout(t);
-  }, [idx, pages]);
+  }, [pageIdx, expandedPages]);
 
-  const activePage = pages && pages.length > 0 ? pages[idx] : { text: 'NO DATA', color: '#ff0000', effect: 'STATIC' as const };
-  const line = renderPage(activePage, cols / 2); // Unscaled cols is half
+  const activePage = expandedPages.length > 0
+    ? expandedPages[pageIdx]
+    : { text: 'NO DATA', color: '#ff0000', effect: 'STATIC' as const, shrink: false };
+
+  // Determine display scale
+  const shrink = activePage.shrink !== false;
+  const tw = textWidth(activePage.text);
+  let scale = 2;
+  if (tw > cols / 2 && shrink && tw <= cols) {
+    scale = 1;
+  }
+
+  const effectivePanelWidth = cols / scale;
+
+  const line = renderPage(activePage, effectivePanelWidth);
 
   return (
     <div className="w-full mx-auto" style={{ perspective: '600px' }}>
@@ -227,9 +268,8 @@ export function P10Display({ pages = [], layout = 'horizontal' }: Props) {
               )}
 
               <g clipPath="url(#panel-clip)" filter="url(#led-glow)">
-                {/* Scale 2x and center vertically */}
-                <g transform={`translate(0, ${(rows - 14)/2}) scale(2)`}>
-                  <PageGroup line={line} panelWidth={cols / 2} />
+                <g transform={`translate(0, ${(rows - CHAR_H * scale) / 2}) scale(${scale})`}>
+                  <PageGroup line={line} panelWidth={effectivePanelWidth} />
                 </g>
               </g>
 

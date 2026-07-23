@@ -24,7 +24,10 @@ export interface DisplaySequenceSection {
     zones?: {
       panelStart: number;
       panelEnd: number;
-      lines: { text: string; color: string; effect: string }[];
+      borderRows?: { start: number; end: number }[];
+      scale?: number;
+      valign?: string;
+      lines: { text: string; color: string; effect: string; align?: string; scrollSpeed?: number; marginTop?: number; marginBottom?: number }[];
     }[];
   }[];
 }
@@ -40,6 +43,47 @@ const DEFAULT_SEQUENCE: DisplaySequenceConfig = {
   prep: { interval: 10, pages: [{ text: "{match_title}" }, { text: "{timer}" }] },
   game: { interval: 10, pages: [{ text: "{match_title}" }, { text: "{timer} LEFT" }, { text: "{queue_count} IN QUEUE" }] },
 };
+
+
+const CHAR_W = 5;
+const SPACING = 1;
+function textWidthPx(text: string, scale: number) {
+  let w = 0;
+  let first = true;
+  for (let i = 0; i < text.length; i++) {
+    if (!first) w += SPACING * scale;
+    w += text[i] === ' ' ? 0 : CHAR_W * scale;
+    first = false;
+  }
+  return w;
+}
+
+function paginateWords(text: string, maxW: number, scale: number): string[] {
+  const chunks: string[] = [];
+  const words = text.split(' ');
+  let cur: string[] = [];
+  let curW = 0;
+  for (const word of words) {
+    if (word.length === 0) continue;
+    const wordW = textWidthPx(word, scale);
+    if (cur.length === 0) {
+      cur.push(word);
+      curW = wordW;
+    } else {
+      const gapW = SPACING * scale;
+      if (curW + gapW + wordW > maxW) {
+        chunks.push(cur.join(' '));
+        cur = [word];
+        curW = wordW;
+      } else {
+        cur.push(word);
+        curW += gapW + wordW;
+      }
+    }
+  }
+  if (cur.length > 0) chunks.push(cur.join(' '));
+  return chunks.length > 0 ? chunks : [text];
+}
 
 function substituteVars(text: string, vars: Record<string, string>): string {
   let result = text;
@@ -59,6 +103,8 @@ export function generatePayload(
     prepTimeSec?: number;
     nextName?: string;
     nextMatch?: string;
+    nextWait?: string;
+    nextBookedTime?: string;
   }
 ): DisplayPayload {
   const nowMs = Date.now();
@@ -100,6 +146,8 @@ export function generatePayload(
     queue_count: String(queueCount),
     next_name: opts?.nextName ?? '',
     next_match: opts?.nextMatch ?? '',
+    next_wait: opts?.nextWait ?? '',
+    next_booked_time: opts?.nextBookedTime ?? '',
   };
 
   const defaultColor = state === 'PLAYING' ? '#00FFFF' : '#00FF00';
@@ -107,28 +155,81 @@ export function generatePayload(
   if (section) {
     for (const tpl of section.pages) {
       if (tpl.zones) {
-        const mappedZones = tpl.zones.map(zone => ({
-          panelStart: zone.panelStart,
-          panelEnd: zone.panelEnd,
-          lines: zone.lines.map(line => ({
-            text: substituteVars(line.text, subVars),
-            color: line.color || defaultColor,
-            effect: line.effect || 'SCROLL',
-          })),
-        }));
-        pages.push({
-          zones: mappedZones,
-          durationSeconds: tpl.durationSeconds ?? section.interval,
+        let maxChunks = 1;
+        const mappedZones = tpl.zones.map(zone => {
+          const zoneW = (zone.panelEnd - zone.panelStart + 1) * 32;
+          const mappedLines = zone.lines.map(line => {
+            const rawText = substituteVars(line.text, subVars);
+            const eff = line.effect || 'SCROLL';
+            let chunks = [rawText];
+            if (eff === 'paginate') {
+              const scale = zone.scale ? zone.scale : (zone.lines.length === 2 ? 1 : 2);
+              chunks = paginateWords(rawText, zoneW, scale);
+              if (chunks.length > maxChunks) maxChunks = chunks.length;
+            }
+            return {
+              textChunks: chunks,
+              color: line.color || defaultColor,
+              effect: eff,
+              ...(line.align && line.align !== 'center' ? { align: line.align } : {}),
+              ...(line.scrollSpeed != null && line.scrollSpeed !== 1 ? { scrollSpeed: line.scrollSpeed } : {}),
+              ...(line.marginTop != null && line.marginTop !== 0 ? { marginTop: line.marginTop } : {}),
+              ...(line.marginBottom != null && line.marginBottom !== 2 ? { marginBottom: line.marginBottom } : {}),
+            };
+          });
+          return {
+            panelStart: zone.panelStart,
+            panelEnd: zone.panelEnd,
+            ...(zone.borderRows && zone.borderRows.length > 0 ? { borderRows: zone.borderRows } : {}),
+            ...(zone.scale ? { scale: zone.scale } : {}),
+            ...(zone.valign && zone.valign !== 'middle' ? { valign: zone.valign } : {}),
+            lines: mappedLines
+          };
         });
+
+        for (let i = 0; i < maxChunks; i++) {
+          pages.push({
+            zones: mappedZones.map(z => ({
+              panelStart: z.panelStart,
+              panelEnd: z.panelEnd,
+              ...(z.borderRows ? { borderRows: z.borderRows } : {}),
+              ...(z.scale ? { scale: z.scale } : {}),
+              ...(z.valign ? { valign: z.valign } : {}),
+              lines: z.lines.map(l => ({
+                text: l.textChunks[i % l.textChunks.length],
+                color: l.color,
+                effect: l.effect === 'paginate' ? 'STATIC' : l.effect,
+                ...(l.align ? { align: l.align } : {}),
+                ...(l.scrollSpeed != null ? { scrollSpeed: l.scrollSpeed } : {}),
+                ...(l.marginTop != null ? { marginTop: l.marginTop } : {}),
+                ...(l.marginBottom != null ? { marginBottom: l.marginBottom } : {}),
+              }))
+            })),
+            durationSeconds: maxChunks > 1 ? 1.5 : (tpl.durationSeconds ?? section.interval),
+          });
+        }
       } else {
         const raw = tpl.text ?? tpl.line1 ?? '';
         const text = substituteVars(raw, subVars);
-        pages.push({
-          text,
-          color: tpl.color ?? defaultColor,
-          effect: (tpl.effect ?? 'SCROLL') as 'SCROLL' | 'STATIC' | 'BLINK' | 'paginate',
-          durationSeconds: tpl.durationSeconds ?? section.interval,
-        });
+        const eff = (tpl.effect ?? 'SCROLL');
+        if (eff === 'paginate') {
+          const chunks = paginateWords(text, 64, 2); // default panel width guess for simple pages
+          for (let i = 0; i < chunks.length; i++) {
+            pages.push({
+              text: chunks[i],
+              color: tpl.color ?? defaultColor,
+              effect: 'STATIC',
+              durationSeconds: 1.5,
+            });
+          }
+        } else {
+          pages.push({
+            text,
+            color: tpl.color ?? defaultColor,
+            effect: eff as any,
+            durationSeconds: tpl.durationSeconds ?? section.interval,
+          });
+        }
       }
     }
   }

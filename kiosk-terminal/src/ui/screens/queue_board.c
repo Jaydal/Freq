@@ -6,43 +6,13 @@
 #include <stdlib.h>
 #include <string.h>
 #include "../../net/pn532_i2c.h"
+#include "../ui_app.h"
 
-typedef struct {
-  queue_board_scan_cb_t cb;
-  void *user_data;
-  char rfid[16];
-} scan_closure_t;
-
-static void free_closure_cb(lv_event_t *e) {
-  free(lv_event_get_user_data(e));
-}
-
-static void scan_click_cb(lv_event_t *e) {
-  scan_closure_t *c = lv_event_get_user_data(e);
-  c->cb(c->user_data, c->rfid);
-}
-
-static void add_scan_button(lv_obj_t *parent, const char *label_text, const char *rfid,
-                             queue_board_scan_cb_t cb, void *user_data) {
-  lv_obj_t *btn = lv_btn_create(parent);
-  lv_obj_set_size(btn, 36, 36);
-  lv_obj_set_style_bg_color(btn, KIOSK_COLOR_ZINC_900, 0);
-  lv_obj_set_style_bg_opa(btn, LV_OPA_90, 0);
-  lv_obj_set_style_border_color(btn, KIOSK_COLOR_ZINC_700, 0);
-  lv_obj_set_style_border_width(btn, 1, 0);
-  lv_obj_set_style_radius(btn, 6, 0);
-  lv_obj_t *label = lv_label_create(btn);
-  lv_label_set_text(label, label_text);
-  lv_obj_set_style_text_font(label, &lv_font_montserrat_14, 0);
-  lv_obj_set_style_text_color(label, KIOSK_COLOR_EMERALD_400, 0);
-  lv_obj_center(label);
-
-  scan_closure_t *closure = malloc(sizeof(scan_closure_t));
-  closure->cb = cb;
-  closure->user_data = user_data;
-  snprintf(closure->rfid, sizeof(closure->rfid), "%s", rfid);
-  lv_obj_add_event_cb(btn, scan_click_cb, LV_EVENT_CLICKED, closure);
-  lv_obj_add_event_cb(btn, free_closure_cb, LV_EVENT_DELETE, closure);
+static void theme_switch_cb(lv_event_t *e) {
+    lv_obj_t *sw = lv_event_get_target(e);
+    bool is_dark = lv_obj_has_state(sw, LV_STATE_CHECKED);
+    kiosk_theme_set_mode(is_dark);
+    ui_app_force_render();
 }
 
 lv_obj_t *queue_board_create(lv_obj_t *parent, const kiosk_board_t *board,
@@ -53,21 +23,34 @@ lv_obj_t *queue_board_create(lv_obj_t *parent, const kiosk_board_t *board,
   lv_obj_set_size(root, lv_pct(100), lv_pct(100));
   lv_obj_set_style_pad_all(root, 16, 0);
 
-  lv_obj_t *nfc_status = lv_label_create(root);
+  lv_obj_t *top_right = lv_obj_create(root);
+  lv_obj_remove_style_all(top_right);
+  lv_obj_set_size(top_right, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+  lv_obj_set_flex_flow(top_right, LV_FLEX_FLOW_ROW);
+  lv_obj_set_flex_align(top_right, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+  lv_obj_set_style_pad_column(top_right, 16, 0);
+  lv_obj_align(top_right, LV_ALIGN_TOP_RIGHT, 0, 0);
+
+  lv_obj_t *theme_sw = lv_switch_create(top_right);
+  if (kiosk_theme_is_dark()) {
+      lv_obj_add_state(theme_sw, LV_STATE_CHECKED);
+  }
+  lv_obj_add_event_cb(theme_sw, theme_switch_cb, LV_EVENT_VALUE_CHANGED, NULL);
+
+  lv_obj_t *nfc_status = lv_label_create(top_right);
   if (pn532_is_online()) {
       lv_label_set_text(nfc_status, "NFC: OK");
-      lv_obj_set_style_text_color(nfc_status, KIOSK_COLOR_EMERALD_400, 0);
+      lv_obj_set_style_text_color(nfc_status, kiosk_theme_color_success(), 0);
   } else {
       lv_label_set_text(nfc_status, "NFC: OFFLINE");
-      lv_obj_set_style_text_color(nfc_status, KIOSK_COLOR_RED_500, 0);
+      lv_obj_set_style_text_color(nfc_status, kiosk_theme_color_danger(), 0);
   }
   lv_obj_set_style_text_font(nfc_status, &lv_font_montserrat_14, 0);
-  lv_obj_align(nfc_status, LV_ALIGN_TOP_RIGHT, 0, 0);
 
   lv_obj_t *brand = lv_label_create(root);
   lv_label_set_text(brand, "Paddle Point Queueing Terminal");
   lv_obj_set_style_text_font(brand, &lv_font_montserrat_16, 0);
-  lv_obj_set_style_text_color(brand, KIOSK_COLOR_EMERALD_400, 0);
+  lv_obj_set_style_text_color(brand, kiosk_theme_color_primary(), 0);
   lv_obj_align(brand, LV_ALIGN_TOP_LEFT, 0, 0);
 
   lv_obj_t *columns = lv_obj_create(root);
@@ -88,7 +71,7 @@ lv_obj_t *queue_board_create(lv_obj_t *parent, const kiosk_board_t *board,
   lv_obj_t *courts_title = lv_label_create(left);
   lv_label_set_text(courts_title, "Courts");
   lv_obj_set_style_text_font(courts_title, &lv_font_montserrat_16, 0);
-  lv_obj_set_style_text_color(courts_title, KIOSK_COLOR_ZINC_500, 0);
+  lv_obj_set_style_text_color(courts_title, kiosk_theme_color_text_muted(), 0);
 
   for (uint8_t i = 0; i < board->court_count; i++) {
     court_status_card_create(left, &board->courts[i], i);
@@ -114,7 +97,7 @@ lv_obj_t *queue_board_create(lv_obj_t *parent, const kiosk_board_t *board,
   lv_obj_t *queue_title_label = lv_label_create(queue_panel);
   lv_label_set_text(queue_title_label, queue_title);
   lv_obj_set_style_text_font(queue_title_label, &lv_font_montserrat_14, 0);
-  lv_obj_set_style_text_color(queue_title_label, KIOSK_COLOR_ZINC_500, 0);
+  lv_obj_set_style_text_color(queue_title_label, kiosk_theme_color_text_muted(), 0);
 
   queue_list_create(queue_panel, board->queue, board->queue_count);
 

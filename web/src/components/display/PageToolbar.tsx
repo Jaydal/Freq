@@ -7,6 +7,7 @@ interface Props {
   pageCount: number;
   currentPage: number;
   durationSeconds: number;
+  previewIndex?: number;
   onPageSelect: (index: number) => void;
   onAddPage: () => void;
   onRemovePage: () => void;
@@ -17,6 +18,7 @@ export function PageToolbar({
   pageCount,
   currentPage,
   durationSeconds,
+  previewIndex,
   onPageSelect,
   onAddPage,
   onRemovePage,
@@ -33,6 +35,8 @@ export function PageToolbar({
             className={`w-6 h-6 text-xs rounded-full font-medium transition-colors ${
               i === currentPage
                 ? 'bg-zinc-700 text-white'
+                : i === previewIndex
+                ? 'bg-green-900/50 text-green-400 border border-green-500/50'
                 : 'bg-zinc-800 text-zinc-500 hover:text-zinc-300'
             }`}
           >

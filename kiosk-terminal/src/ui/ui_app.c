@@ -11,15 +11,15 @@
 #include "screens/queue_board.h"
 #include "screens/terminal_layout.h"
 #include "screens/setup_screen.h"
+#include "screens/screensaver.h"
 #include "widgets/court_overview.h"
 #include "widgets/step_select_court.h"
 #include "widgets/step_select_game_type.h"
 #include "widgets/step_select_duration.h"
 #include "widgets/step_booking_success.h"
+#include "widgets/step_booking_confirm.h"
 #include "widgets/step_error.h"
 
-/* KIOSK_STEP_SETUP is device-config (WiFi); the rest mirror
- * TerminalKiosk.tsx's KioskStep union. */
 typedef enum {
   KIOSK_STEP_SETUP,
   KIOSK_STEP_BOOTING,
@@ -28,8 +28,10 @@ typedef enum {
   KIOSK_STEP_SELECT_COURT,
   KIOSK_STEP_SELECT_GAME,
   KIOSK_STEP_SELECT_DURATION,
+  KIOSK_STEP_CONFIRM,
   KIOSK_STEP_SUCCESS,
   KIOSK_STEP_ERROR,
+  KIOSK_STEP_SCREENSAVER,
 } kiosk_step_t;
 
 typedef struct {
@@ -40,12 +42,15 @@ typedef struct {
   court_option_t selected_court;
   game_type_t game_type;
   int32_t duration_min;
+  char match_title[KIOSK_MAX_NAME_LEN];
 
   booking_result_t result;
   kiosk_error_t error;
   time_t success_entered_at;
 
   lv_obj_t *current_root;
+  terminal_layout_t terminal_layout;
+  bool has_terminal_layout;
 } ui_app_state_t;
 
 static ui_app_state_t s_app;
@@ -77,10 +82,8 @@ static void apply_provider(void) {
 static void handle_setup_done(void *user_data) {
   (void)user_data;
 #ifdef ESP_PLATFORM
-  /* Config just changed — reboot to apply WiFi credentials. */
   esp_restart();
 #else
-  /* Config just changed — reconnect the live provider with the new values. */
   apply_provider();
   reset_to_idle();
 #endif
@@ -93,14 +96,41 @@ static void idle_long_press_cb(lv_event_t *e) {
   render_current();
 }
 
-/* ---- step transition handlers (mirror TerminalKiosk.tsx's handle*) ---- */
+/* ---- scan ---- */
 
+#ifdef ESP_PLATFORM
+#include "freertos/FreeRTOS.h"
+#include "freertos/queue.h"
+static QueueHandle_t s_rfid_queue = NULL;
+#endif
+
+#ifndef ESP_PLATFORM
 static char s_pending_rfid[32] = {0};
 static volatile bool s_has_pending_rfid = false;
+#endif
 
 void ui_app_handle_scan(const char *rfid) {
+#ifdef ESP_PLATFORM
+    if (s_rfid_queue) {
+        char buf[32];
+        snprintf(buf, sizeof(buf), "%s", rfid);
+        /* Can be called from an ISR context or task context depending on PN532 driver */
+        if (xPortInIsrContext()) {
+            BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+            xQueueSendFromISR(s_rfid_queue, buf, &xHigherPriorityTaskWoken);
+            if (xHigherPriorityTaskWoken) portYIELD_FROM_ISR();
+        } else {
+            xQueueSend(s_rfid_queue, buf, 0);
+        }
+    }
+#else
     snprintf(s_pending_rfid, sizeof(s_pending_rfid), "%s", rfid);
     s_has_pending_rfid = true;
+#endif
+}
+
+void ui_app_force_render(void) {
+    render_current();
 }
 
 /* ---- action handlers ---- */
@@ -111,10 +141,6 @@ static void handle_scan(void *user_data, const char *rfid) {
   s_app.error.message[0] = '\0';
   if (!s_app.provider->lookup_member(rfid, &s_app.member)) {
     snprintf(s_app.error.title, sizeof(s_app.error.title), "RFID Read Failed");
-    // The provider's lookup_member should populate s_app.error (if the interface allowed it).
-    // Wait, the interface for lookup_member returns boolean, and takes `kiosk_member_t`.
-    // We don't get the error struct back easily without changing the interface.
-    // I will just leave the message hardcoded, but add the RFID to it for debugging.
     snprintf(s_app.error.message, sizeof(s_app.error.message), "Error looking up %s", rfid);
     s_app.step = KIOSK_STEP_ERROR;
     render_current();
@@ -124,10 +150,10 @@ static void handle_scan(void *user_data, const char *rfid) {
   member_state_t state = s_app.provider->check_member_state(s_app.member.id, &s_app.error);
   switch (state) {
     case MEMBER_STATE_HAS_WAITING: s_app.step = KIOSK_STEP_EXISTING_QUEUE; break;
-    case MEMBER_STATE_ALREADY_PLAYING: 
+    case MEMBER_STATE_ALREADY_PLAYING:
       snprintf(s_app.error.title, sizeof(s_app.error.title), "Already Playing");
       snprintf(s_app.error.message, sizeof(s_app.error.message), "You are already in an active game.");
-      s_app.step = KIOSK_STEP_ERROR; 
+      s_app.step = KIOSK_STEP_ERROR;
       break;
     case MEMBER_STATE_NONE:
     default: s_app.step = KIOSK_STEP_SELECT_COURT; break;
@@ -152,8 +178,14 @@ static void handle_select_game_type(void *user_data, game_type_t game_type) {
 static void handle_select_duration(void *user_data, int32_t duration_min) {
   (void)user_data;
   s_app.duration_min = duration_min;
+  s_app.step = KIOSK_STEP_CONFIRM;
+  render_current();
+}
+
+static void handle_confirm(void *user_data) {
+  (void)user_data;
   bool ok = s_app.provider->join_queue(s_app.member.id, s_app.selected_court.id, s_app.game_type,
-                                        s_app.duration_min, "", &s_app.result, &s_app.error);
+                                        s_app.duration_min, s_app.match_title, &s_app.result, &s_app.error);
   if (!ok) {
     s_app.step = KIOSK_STEP_ERROR;
   } else {
@@ -191,11 +223,29 @@ static void close_to_idle(void *user_data) {
   reset_to_idle();
 }
 
+static void handle_back_step(void *user_data) {
+  (void)user_data;
+  if (s_app.step == KIOSK_STEP_SELECT_GAME) s_app.step = KIOSK_STEP_SELECT_COURT;
+  else if (s_app.step == KIOSK_STEP_SELECT_DURATION) s_app.step = KIOSK_STEP_SELECT_GAME;
+  else if (s_app.step == KIOSK_STEP_CONFIRM) s_app.step = KIOSK_STEP_SELECT_DURATION;
+  render_current();
+}
+
 static void reset_to_idle(void) {
   memset(&s_app.member, 0, sizeof(s_app.member));
   memset(&s_app.selected_court, 0, sizeof(s_app.selected_court));
+  memset(s_app.match_title, 0, sizeof(s_app.match_title));
   s_app.step = KIOSK_STEP_IDLE;
   render_current();
+}
+
+/* Formatted member name helper */
+static void format_member_name(char *buf, size_t size) {
+  if (s_app.member.first_name[0] || s_app.member.last_name[0]) {
+    snprintf(buf, size, "%s %s", s_app.member.first_name, s_app.member.last_name);
+  } else {
+    buf[0] = '\0';
+  }
 }
 
 /* ---- rendering ---- */
@@ -217,43 +267,67 @@ static lv_obj_t *build_existing_queue_screen(lv_obj_t *parent) {
   lv_obj_set_flex_flow(root, LV_FLEX_FLOW_COLUMN);
   lv_obj_set_flex_align(root, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
   lv_obj_set_style_pad_all(root, 24, 0);
-  lv_obj_set_style_pad_row(root, 12, 0);
+  
+  lv_obj_t *icon_box = lv_obj_create(root);
+  lv_obj_remove_style_all(icon_box);
+  lv_obj_set_size(icon_box, 80, 80);
+  lv_obj_set_style_radius(icon_box, 40, 0);
+  lv_obj_set_style_bg_color(icon_box, kiosk_theme_color_primary(), 0);
+  lv_obj_set_style_bg_opa(icon_box, LV_OPA_10, 0);
+  lv_obj_set_style_border_width(icon_box, 1, 0);
+  lv_obj_set_style_border_color(icon_box, kiosk_theme_color_primary(), 0);
+  lv_obj_set_style_border_opa(icon_box, LV_OPA_30, 0);
+
+  lv_obj_t *icon = lv_label_create(icon_box);
+  lv_label_set_text(icon, LV_SYMBOL_BELL);
+  lv_obj_set_style_text_font(icon, &lv_font_montserrat_32, 0);
+  lv_obj_set_style_text_color(icon, kiosk_theme_color_primary(), 0);
+  lv_obj_center(icon);
 
   lv_obj_t *title = lv_label_create(root);
-  lv_label_set_text(title, "Existing Booking");
+  lv_label_set_text(title, "Active Booking Found");
   lv_obj_set_style_text_font(title, &lv_font_montserrat_20, 0);
-  lv_obj_set_style_text_color(title, KIOSK_COLOR_AMBER_400, 0);
+  lv_obj_set_style_text_color(title, kiosk_theme_color_text_strong(), 0);
+  lv_obj_set_style_pad_top(title, 20, 0);
 
   lv_obj_t *sub = lv_label_create(root);
-  lv_label_set_text(sub, "You have an active queue entry.");
+  lv_label_set_text(sub, "You are already in the queue for a court.\\nWould you like to book another match or cancel your existing one?");
   lv_obj_set_style_text_font(sub, &lv_font_montserrat_14, 0);
-  lv_obj_set_style_text_color(sub, KIOSK_COLOR_ZINC_400, 0);
+  lv_obj_set_style_text_color(sub, kiosk_theme_color_text_muted(), 0);
+  lv_obj_set_style_text_align(sub, LV_TEXT_ALIGN_CENTER, 0);
+  lv_obj_set_style_pad_top(sub, 8, 0);
+  lv_obj_set_style_pad_bottom(sub, 32, 0);
 
-  lv_obj_t *btn_col = lv_obj_create(root);
-  lv_obj_remove_style_all(btn_col);
-  lv_obj_set_width(btn_col, lv_pct(70));
-  lv_obj_set_height(btn_col, LV_SIZE_CONTENT);
-  lv_obj_set_flex_flow(btn_col, LV_FLEX_FLOW_COLUMN);
-  lv_obj_set_style_pad_row(btn_col, 8, 0);
+  lv_obj_t *btn_row = lv_obj_create(root);
+  lv_obj_remove_style_all(btn_row);
+  lv_obj_set_width(btn_row, lv_pct(80));
+  lv_obj_set_height(btn_row, LV_SIZE_CONTENT);
+  lv_obj_set_flex_flow(btn_row, LV_FLEX_FLOW_ROW);
+  lv_obj_set_flex_align(btn_row, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+  lv_obj_set_style_pad_column(btn_row, 16, 0);
 
-  lv_obj_t *cancel_btn = lv_btn_create(btn_col);
-  lv_obj_set_style_bg_color(cancel_btn, KIOSK_COLOR_RED_500, 0);
-  lv_obj_set_style_min_height(cancel_btn, KIOSK_MIN_TOUCH_PX, 0);
+  lv_obj_t *cancel_btn = lv_btn_create(btn_row);
+  lv_obj_add_style(cancel_btn, &kiosk_style_btn_secondary, 0);
+  lv_obj_set_style_border_color(cancel_btn, KIOSK_COLOR_RED_500, 0);
+  lv_obj_set_style_bg_color(cancel_btn, KIOSK_COLOR_RED_500, LV_STATE_PRESSED);
+  lv_obj_set_style_bg_opa(cancel_btn, LV_OPA_10, LV_STATE_PRESSED);
+  lv_obj_set_flex_grow(cancel_btn, 1);
   lv_obj_t *cancel_label = lv_label_create(cancel_btn);
-  lv_label_set_text(cancel_label, "Cancel Booking");
+  lv_label_set_text(cancel_label, LV_SYMBOL_TRASH " Cancel Booking");
+  lv_obj_set_style_text_color(cancel_label, KIOSK_COLOR_RED_500, 0);
   lv_obj_center(cancel_label);
   lv_obj_add_event_cb(cancel_btn, cancel_existing_click_cb, LV_EVENT_CLICKED, NULL);
 
-  lv_obj_t *another_btn = lv_btn_create(btn_col);
-  lv_obj_add_style(another_btn, &kiosk_style_btn_secondary, 0);
+  lv_obj_t *another_btn = lv_btn_create(btn_row);
+  lv_obj_add_style(another_btn, &kiosk_style_btn_primary, 0);
+  lv_obj_set_flex_grow(another_btn, 1);
   lv_obj_t *another_label = lv_label_create(another_btn);
-  lv_label_set_text(another_label, "Book Another");
+  lv_label_set_text(another_label, LV_SYMBOL_PLUS " Book Another");
   lv_obj_center(another_label);
   lv_obj_add_event_cb(another_btn, book_another_click_cb, LV_EVENT_CLICKED, NULL);
 
   return root;
 }
-
 static lv_obj_t *build_booting_screen(lv_obj_t *parent) {
   lv_obj_t *root = lv_obj_create(parent);
   lv_obj_remove_style_all(root);
@@ -286,13 +360,38 @@ static lv_obj_t *build_booting_screen(lv_obj_t *parent) {
 
 static void render_current(void) {
   static kiosk_board_t board;
-  
-  if (s_app.current_root) {
-    lv_obj_del(s_app.current_root);
-    s_app.current_root = NULL;
-  }
 
   lv_obj_t *scr = lv_scr_act();
+  char member_name[64];
+
+  bool needs_terminal = (s_app.step == KIOSK_STEP_EXISTING_QUEUE ||
+                         s_app.step == KIOSK_STEP_SELECT_COURT ||
+                         s_app.step == KIOSK_STEP_SELECT_GAME ||
+                         s_app.step == KIOSK_STEP_SELECT_DURATION ||
+                         s_app.step == KIOSK_STEP_CONFIRM ||
+                         s_app.step == KIOSK_STEP_SUCCESS ||
+                         s_app.step == KIOSK_STEP_ERROR);
+
+  if (needs_terminal) {
+    if (!s_app.has_terminal_layout) {
+      if (s_app.current_root) {
+        lv_obj_del(s_app.current_root);
+        s_app.current_root = NULL;
+      }
+      s_app.terminal_layout = terminal_layout_create(scr);
+      s_app.current_root = s_app.terminal_layout.root;
+      s_app.has_terminal_layout = true;
+    } else {
+      lv_obj_clean(s_app.terminal_layout.content);
+      lv_obj_clean(s_app.terminal_layout.sidebar);
+    }
+  } else {
+    if (s_app.current_root) {
+      lv_obj_del(s_app.current_root);
+      s_app.current_root = NULL;
+    }
+    s_app.has_terminal_layout = false;
+  }
 
   switch (s_app.step) {
     case KIOSK_STEP_SETUP: {
@@ -306,7 +405,6 @@ static void render_current(void) {
     case KIOSK_STEP_IDLE: {
       s_app.provider->get_board(&board);
       s_app.current_root = queue_board_create(scr, &board, handle_scan, NULL);
-      /* Hidden long-press target, top-left corner, to re-open WiFi setup. */
       lv_obj_t *corner = lv_obj_create(s_app.current_root);
       lv_obj_remove_style_all(corner);
       lv_obj_set_size(corner, 60, 60);
@@ -315,59 +413,92 @@ static void render_current(void) {
       lv_obj_add_event_cb(corner, idle_long_press_cb, LV_EVENT_LONG_PRESSED, NULL);
       break;
     }
+    case KIOSK_STEP_SCREENSAVER: {
+      s_app.current_root = screensaver_create(scr, close_to_idle, NULL);
+      break;
+    }
     case KIOSK_STEP_EXISTING_QUEUE: {
-      terminal_layout_t layout = terminal_layout_create(scr, true, close_to_idle, NULL);
-      s_app.current_root = layout.root;
-      build_existing_queue_screen(layout.content);
+      terminal_layout_set_sidebar(&s_app.terminal_layout, true);
+      build_existing_queue_screen(s_app.terminal_layout.content);
       s_app.provider->get_board(&board);
-      court_overview_create(layout.sidebar, board.courts, board.court_count);
+      court_overview_create(s_app.terminal_layout.sidebar, board.courts, board.court_count);
       break;
     }
     case KIOSK_STEP_SELECT_COURT: {
-      terminal_layout_t layout = terminal_layout_create(scr, true, close_to_idle, NULL);
-      s_app.current_root = layout.root;
+      terminal_layout_set_sidebar(&s_app.terminal_layout, true);
       court_option_t options[KIOSK_MAX_COURTS];
       uint8_t count = 0;
       s_app.provider->get_court_options(options, &count);
-      step_select_court_create(layout.content, options, count, handle_select_court, NULL);
+      format_member_name(member_name, sizeof(member_name));
+      step_select_court_create(s_app.terminal_layout.content,
+                                member_name, s_app.member.balance,
+                                options, count,
+                                handle_select_court,
+                                close_to_idle, NULL, NULL);
       s_app.provider->get_board(&board);
-      court_overview_create(layout.sidebar, board.courts, board.court_count);
+      court_overview_create(s_app.terminal_layout.sidebar, board.courts, board.court_count);
       break;
     }
     case KIOSK_STEP_SELECT_GAME: {
-      terminal_layout_t layout = terminal_layout_create(scr, true, close_to_idle, NULL);
-      s_app.current_root = layout.root;
-      step_select_game_type_create(layout.content, handle_select_game_type, NULL);
+      terminal_layout_set_sidebar(&s_app.terminal_layout, true);
+      format_member_name(member_name, sizeof(member_name));
+      step_select_game_type_create(s_app.terminal_layout.content,
+                                    member_name, s_app.member.balance,
+                                    handle_select_game_type,
+                                    close_to_idle, NULL,
+                                    handle_back_step, NULL, NULL);
       s_app.provider->get_board(&board);
-      court_overview_create(layout.sidebar, board.courts, board.court_count);
+      court_overview_create(s_app.terminal_layout.sidebar, board.courts, board.court_count);
       break;
     }
     case KIOSK_STEP_SELECT_DURATION: {
-      terminal_layout_t layout = terminal_layout_create(scr, true, close_to_idle, NULL);
-      s_app.current_root = layout.root;
+      terminal_layout_set_sidebar(&s_app.terminal_layout, true);
       kiosk_products_config_t cfg;
       s_app.provider->get_products_config(&cfg);
-      step_select_duration_create(layout.content, &cfg, handle_select_duration, NULL);
+      format_member_name(member_name, sizeof(member_name));
+      step_select_duration_create(s_app.terminal_layout.content,
+                                   member_name, s_app.member.balance,
+                                   &cfg,
+                                   handle_select_duration,
+                                   close_to_idle, NULL,
+                                   handle_back_step, NULL, NULL);
       s_app.provider->get_board(&board);
-      court_overview_create(layout.sidebar, board.courts, board.court_count);
+      court_overview_create(s_app.terminal_layout.sidebar, board.courts, board.court_count);
+      break;
+    }
+    case KIOSK_STEP_CONFIRM: {
+      terminal_layout_set_sidebar(&s_app.terminal_layout, false);
+      kiosk_products_config_t cfg;
+      s_app.provider->get_products_config(&cfg);
+      int32_t party_size = (s_app.game_type == GAME_TYPE_2V2) ? 4 : 2;
+      int32_t credits_required = kiosk_get_cost(&cfg, s_app.duration_min, party_size);
+      const char *game_label = (s_app.game_type == GAME_TYPE_2V2) ? "Doubles (2v2)" : "Singles (1v1)";
+      format_member_name(member_name, sizeof(member_name));
+      step_booking_confirm_create(s_app.terminal_layout.content,
+                                   member_name, s_app.member.balance,
+                                   s_app.selected_court.name,
+                                   game_label,
+                                   s_app.duration_min,
+                                   credits_required,
+                                   handle_confirm,
+                                   close_to_idle, NULL,
+                                   handle_back_step, NULL, NULL);
       break;
     }
     case KIOSK_STEP_SUCCESS: {
-      terminal_layout_t layout = terminal_layout_create(scr, false, NULL, NULL);
-      s_app.current_root = layout.root;
-      step_booking_success_create(layout.content, &s_app.result);
+      terminal_layout_set_sidebar(&s_app.terminal_layout, false);
+      step_booking_success_create(s_app.terminal_layout.content, &s_app.result);
       break;
     }
     case KIOSK_STEP_ERROR: {
-      terminal_layout_t layout = terminal_layout_create(scr, false, NULL, NULL);
-      s_app.current_root = layout.root;
-      step_error_create(layout.content, &s_app.error, handle_error_retry, NULL);
+      terminal_layout_set_sidebar(&s_app.terminal_layout, false);
+      step_error_create(s_app.terminal_layout.content, &s_app.error, handle_error_retry, NULL);
       break;
     }
   }
 }
 
-/* ---- periodic refresh: keeps idle/offer timers advancing, auto-dismisses success ---- */
+/* ---- periodic refresh ---- */
 
 static void send_refresh_recursive(lv_obj_t *obj) {
     if (!obj) return;
@@ -382,10 +513,29 @@ static uint32_t s_last_board_version = 0;
 
 static void on_tick(lv_timer_t *timer) {
   (void)timer;
-  
+
+#ifdef ESP_PLATFORM
+  char buf[32];
+  if (s_rfid_queue && xQueueReceive(s_rfid_queue, buf, 0) == pdTRUE) {
+      handle_scan(NULL, buf);
+  }
+#else
   if (s_has_pending_rfid) {
       s_has_pending_rfid = false;
       handle_scan(NULL, s_pending_rfid);
+  }
+#endif
+
+  bool is_booking_step = (s_app.step == KIOSK_STEP_EXISTING_QUEUE ||
+                          s_app.step == KIOSK_STEP_SELECT_COURT ||
+                          s_app.step == KIOSK_STEP_SELECT_GAME ||
+                          s_app.step == KIOSK_STEP_SELECT_DURATION ||
+                          s_app.step == KIOSK_STEP_CONFIRM ||
+                          s_app.step == KIOSK_STEP_ERROR);
+
+  if (is_booking_step && lv_disp_get_inactive_time(NULL) > 30000) {
+      reset_to_idle();
+      return;
   }
 
   if (s_app.step == KIOSK_STEP_BOOTING) {
@@ -393,20 +543,23 @@ static void on_tick(lv_timer_t *timer) {
       s_app.step = KIOSK_STEP_IDLE;
       render_current();
     } else if (lv_tick_get() > 15000) {
-      /* Timeout connecting to network/MQTT, kick user back to setup */
       s_app.step = KIOSK_STEP_SETUP;
       render_current();
     }
   } else if (s_app.step == KIOSK_STEP_IDLE) {
+    if (lv_disp_get_inactive_time(NULL) > 30000) {
+        s_app.step = KIOSK_STEP_SCREENSAVER;
+        render_current();
+        return;
+    }
+
     uint32_t current_ver = s_app.provider->get_board_version();
     bool board_changed = (current_ver != s_last_board_version);
     s_last_board_version = current_ver;
-    
+
     if (board_changed) {
         render_current();
     } else {
-        /* If the data hasn't changed, do NOT destroy the UI (which causes layout flicker).
-         * Instead, simply broadcast a refresh event so timer widgets can update their labels locally! */
         send_refresh_recursive(s_app.current_root);
     }
   } else if (s_app.step == KIOSK_STEP_SUCCESS) {
@@ -421,6 +574,10 @@ void ui_app_init(void) {
   memset(&s_app, 0, sizeof(s_app));
   apply_provider();
   
+#ifdef ESP_PLATFORM
+  s_rfid_queue = xQueueCreate(5, 32);
+#endif
+
   kiosk_config_t cfg;
   bool valid_config = false;
   if (kiosk_config_exists() && kiosk_config_load(&cfg)) {
@@ -428,8 +585,7 @@ void ui_app_init(void) {
       valid_config = true;
     }
   }
-  
-  /* First boot (no saved config) lands on setup; otherwise booting. */
+
   s_app.step = valid_config ? KIOSK_STEP_BOOTING : KIOSK_STEP_SETUP;
   render_current();
   lv_timer_create(on_tick, 1000, NULL);

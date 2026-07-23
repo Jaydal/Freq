@@ -125,7 +125,7 @@ export async function processCourtQueue(courtId: string): Promise<void> {
     // Publish display and board
     publishDisplay(courtId, generatePayload(courtId, {
       current: {
-        name: entry.match_title || matchType,
+        name: entry.match_title || '',
         startTime: now.toISOString(),
         durationMinutes: entry.duration,
         matchTitle: entry.match_title || '',

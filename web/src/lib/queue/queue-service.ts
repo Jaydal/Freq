@@ -154,7 +154,7 @@ export async function joinQueue(params: JoinQueueParams): Promise<QueueEntry> {
     const matchType = params.partySize === 4 ? '2v2' : '1v1';
     publishDisplay(court.id, generatePayload(court.id, {
       current: {
-        name: params.matchTitle || matchType,
+        name: params.matchTitle || '',
         startTime: new Date().toISOString(),
         durationMinutes: params.duration,
         matchTitle: params.matchTitle || '',

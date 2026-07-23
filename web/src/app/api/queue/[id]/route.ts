@@ -83,7 +83,7 @@ export async function PATCH(
 
   await publishDisplay(game.court_id, generatePayload(game.court_id, {
     current: {
-      name: players || game.match_type,
+      name: players || '',
       startTime: new Date().toISOString(),
       durationMinutes: game.duration,
       matchTitle: game.match_title || '',

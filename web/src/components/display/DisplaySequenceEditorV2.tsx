@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { P10Canvas } from './P10Canvas';
 import { ZonePanel } from './ZonePanel';
@@ -8,6 +8,7 @@ import { PageToolbar } from './PageToolbar';
 import { TemplateDropdown } from './TemplateDropdown';
 import { ZONE_TEMPLATES, type ZoneTemplate } from './zone-types';
 import type { DisplayZone, DisplayLine, ZonePage } from './zone-types';
+import { MockValuesPanel, DEFAULT_MOCK_VALUES, type MockValues } from './MockValuesPanel';
 
 interface SectionState {
   interval: number;
@@ -92,6 +93,9 @@ function parseSequence(raw: string): Record<SectionKey, SectionState> {
             zones: p.zones.map((z: any) => ({
               panelStart: z.panelStart ?? 0,
               panelEnd: z.panelEnd ?? 2,
+              borderRows: z.borderRows && z.borderRows.length > 0 ? z.borderRows : undefined,
+              scale: z.scale,
+              valign: z.valign,
               lines: (
                 z.lines || [
                   {
@@ -105,6 +109,7 @@ function parseSequence(raw: string): Record<SectionKey, SectionState> {
                   text: l.text ?? '',
                   color: l.color ?? '#00FF00',
                   effect: l.effect ?? 'STATIC',
+                  align: l.align,
                 })
               ),
             })),
@@ -148,6 +153,9 @@ function serializeSequence(
           panelStart: z.panelStart,
           panelEnd: z.panelEnd,
           lines: z.lines,
+          ...(z.borderRows && z.borderRows.length > 0 ? { borderRows: z.borderRows } : {}),
+          ...(z.scale ? { scale: z.scale } : {}),
+          ...(z.valign && z.valign !== 'middle' ? { valign: z.valign } : {}),
         })),
       })),
     };
@@ -168,11 +176,70 @@ export function DisplaySequenceEditorV2({ sequence: initial }: Props) {
   const [selectedZone, setSelectedZone] = useState<number | null>(0);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isPreviewing, setIsPreviewing] = useState(false);
+  const [previewPageIndex, setPreviewPageIndex] = useState(0);
+  const [mockValues, setMockValues] = useState<MockValues>(DEFAULT_MOCK_VALUES);
+  const previewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const section = sections[activeSection];
   const pageIdx = clampPage(currentPage, section.pages.length);
   const page = section.pages[pageIdx];
   const zones = page?.zones || [];
+
+  const flatPages = useMemo(() => {
+    const all: { page: ZonePage; section: string }[] = [];
+    for (const key of SECTIONS) {
+      for (const p of sections[key].pages) {
+        all.push({ page: p, section: key });
+      }
+    }
+    return all;
+  }, [sections]);
+
+  function substituteMockVariables(text: string): string {
+    let result = text;
+    for (const [key, val] of Object.entries(mockValues)) {
+      result = result.replace(new RegExp(`\\{${key}\\}`, 'g'), val);
+    }
+    return result;
+  }
+
+  const previewZones = useMemo(() => {
+    if (!isPreviewing || flatPages.length === 0) return zones;
+    const activePage = flatPages[previewPageIndex].page;
+    return activePage.zones.map(zone => ({
+      ...zone,
+      lines: zone.lines.map(line => ({
+        ...line,
+        text: substituteMockVariables(line.text),
+      })),
+    }));
+  }, [isPreviewing, previewPageIndex, flatPages, zones, mockValues]);
+
+  function startPreview() {
+    setIsPreviewing(true);
+    setPreviewPageIndex(0);
+  }
+
+  function stopPreview() {
+    setIsPreviewing(false);
+    if (previewTimerRef.current) {
+      clearTimeout(previewTimerRef.current);
+      previewTimerRef.current = null;
+    }
+  }
+
+  useEffect(() => {
+    if (!isPreviewing || flatPages.length === 0) return;
+    const currentPage = flatPages[previewPageIndex].page;
+    const ms = (currentPage.durationSeconds || 10) * 1000;
+    previewTimerRef.current = setTimeout(() => {
+      setPreviewPageIndex(prev => (prev + 1) % flatPages.length);
+    }, ms);
+    return () => {
+      if (previewTimerRef.current) clearTimeout(previewTimerRef.current);
+    };
+  }, [isPreviewing, previewPageIndex, flatPages]);
 
   function updateSection(
     updater: (s: SectionState) => SectionState
@@ -198,7 +265,7 @@ export function DisplaySequenceEditorV2({ sequence: initial }: Props) {
         zones.map((z, zi) => (zi === index ? updated : z))
       );
     },
-    [pageIdx]
+    [pageIdx, activeSection]
   );
 
   const applyTemplate = useCallback(
@@ -218,7 +285,7 @@ export function DisplaySequenceEditorV2({ sequence: initial }: Props) {
       updateCurrentPage(() => newZones);
       setSelectedZone(0);
     },
-    [pageIdx]
+    [pageIdx, activeSection]
   );
 
   async function handleSave() {
@@ -260,6 +327,14 @@ export function DisplaySequenceEditorV2({ sequence: initial }: Props) {
           </button>
         ))}
         <div className="ml-auto flex items-center gap-2">
+          <Button
+            onClick={isPreviewing ? stopPreview : startPreview}
+            size="sm"
+            variant={isPreviewing ? 'destructive' : 'default'}
+            className="h-7 text-xs"
+          >
+            {isPreviewing ? '■ Stop' : '▶ Live Preview'}
+          </Button>
           <TemplateDropdown onSelect={applyTemplate} />
           <Button
             onClick={handleSave}
@@ -274,9 +349,14 @@ export function DisplaySequenceEditorV2({ sequence: initial }: Props) {
 
       {error && <p className="text-xs text-red-400">{error}</p>}
 
+      {isPreviewing && (
+        <MockValuesPanel values={mockValues} onChange={setMockValues} />
+      )}
+
       <PageToolbar
         pageCount={section.pages.length}
         currentPage={pageIdx}
+        previewIndex={isPreviewing ? previewPageIndex : undefined}
         durationSeconds={page?.durationSeconds ?? 10}
         onPageSelect={i => {
           setCurrentPage(i);
@@ -327,9 +407,9 @@ export function DisplaySequenceEditorV2({ sequence: initial }: Props) {
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
         <div className="xl:col-span-2">
           <P10Canvas
-            zones={zones}
-            selectedZoneIndex={selectedZone}
-            onZoneSelect={setSelectedZone}
+            zones={isPreviewing ? previewZones : zones}
+            selectedZoneIndex={isPreviewing ? null : selectedZone}
+            onZoneSelect={isPreviewing ? () => {} : setSelectedZone}
           />
           {zones.length === 0 && (
             <p className="text-xs text-zinc-500 mt-2">

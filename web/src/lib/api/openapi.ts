@@ -1,9 +1,9 @@
 export const openApiSpec = {
   openapi: '3.1.0',
   info: {
-    title: 'Pickleball Court Prompter API',
+    title: 'Paddle Point API',
     version: '1.0.0',
-    description: `Queue management, court booking, and MQTT display system for the Freq pickleball system.
+    description: `Queue management, court booking, and MQTT display system for Paddle Point — Solano, Nueva Vizcaya.
 
 ## MQTT Topics
 

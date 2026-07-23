@@ -27,6 +27,7 @@ private:
 
   static const int MAX_ZONES = 3;
   static const int MAX_LINES_PER_ZONE = 2;
+  static const int MAX_BORDER_RANGES = 4;
 
   struct ZoneState {
     uint8_t panelStart;
@@ -36,10 +37,18 @@ private:
       String text;
       uint16_t color;
       String effect;
+      String align;
       int scrollX;
       unsigned long scrollLastTick;
+      float scrollSpeed;
+      uint8_t marginTop;
+      uint8_t marginBottom;
     } lines[MAX_LINES_PER_ZONE];
     bool hasData;
+    uint8_t scale;
+    String valign;
+    uint8_t borderCount;
+    BorderRange borderRanges[MAX_BORDER_RANGES];
   };
 
   ZoneState _zones[MAX_ZONES];
@@ -58,10 +67,9 @@ private:
 
   String substituteTimer(const String& text) const;
   void redraw();
-  void drawText5x7Scaled(const char* s, int x, int y, uint16_t color, int scale, int clipXStart, int clipXEnd);
+  void drawText5x7Scaled(const char* s, int x, int y, uint16_t color, int scale, int clipXStart, int clipXEnd, uint8_t borderCount = 0, const BorderRange* borderRanges = nullptr);
   int  textWidth5x7Scaled(const char* s, int scale);
   void drawPixelMapped(int x, int y, uint16_t color);
-  void paginateText(const String& text);
 };
 
 #endif

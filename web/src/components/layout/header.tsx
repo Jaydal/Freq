@@ -51,7 +51,7 @@ export function Header() {
         <button onClick={toggleSidebar} className="lg:hidden text-muted-foreground hover:text-foreground cursor-pointer shrink-0">
           <Menu size={20} />
         </button>
-        <span className={`size-2 rounded-full shrink-0 ${mqttConnected ? 'bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.5)]' : 'bg-red-500'}`} />
+        <span className={`size-2 rounded-full shrink-0 ${mqttConnected ? 'bg-sky-400 shadow-[0_0_6px_rgba(56,189,248,0.5)]' : 'bg-red-500'}`} />
         <span className="text-[11px] text-muted-foreground font-medium hidden sm:inline">
           MQTT {mqttConnected ? 'Connected' : 'Disconnected'}
         </span>

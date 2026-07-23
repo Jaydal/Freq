@@ -70,12 +70,15 @@ add_executable(kiosk_sim
   src/ui/widgets/court_status_card.c
   src/ui/widgets/queue_list.c
   src/ui/widgets/court_overview.c
+  src/ui/widgets/booking_stepper.c
   src/ui/widgets/step_select_court.c
   src/ui/widgets/step_select_game_type.c
   src/ui/widgets/step_select_duration.c
   src/ui/widgets/step_booking_success.c
+  src/ui/widgets/step_booking_confirm.c
   src/ui/widgets/step_error.c
   src/ui/screens/queue_board.c
+  src/ui/screens/screensaver.c
   src/ui/screens/terminal_layout.c
   src/ui/screens/setup_screen.c
   src/ui/ui_app.c

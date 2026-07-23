@@ -1,7 +1,7 @@
 'use client';
 
-import { useCallback } from 'react';
-import { CHAR_W, CHAR_H, CELL_W, textToDots } from './P10Display';
+import { useCallback, useState, useEffect } from 'react';
+import { CHAR_W, CHAR_H, CELL_W, SPACING, textToDots } from './P10Display';
 import type { DisplayZone } from './zone-types';
 
 const PANEL_W = 32;
@@ -19,32 +19,152 @@ function getPanelX(panelIndex: number): number {
   return panelIndex * (PANEL_W + GAP);
 }
 
-function renderZoneDots(zone: DisplayZone): { x: number; y: number; color: string }[] {
+function isBorderRow(y: number, borderRows?: { start: number; end: number }[]): boolean {
+  if (!borderRows || borderRows.length === 0) return false;
+  return borderRows.some(br => y >= br.start && y <= br.end);
+}
+
+function getAvailableVRange(borderRows?: { start: number; end: number }[]): { top: number; bottom: number } {
+  if (!borderRows || borderRows.length === 0) return { top: 0, bottom: PANEL_H - 1 };
+  const isBorder = new Array(PANEL_H).fill(false);
+  for (const br of borderRows) {
+    for (let y = br.start; y <= br.end; y++) isBorder[y] = true;
+  }
+  let top = -1, bottom = -1;
+  for (let y = 0; y < PANEL_H; y++) {
+    if (!isBorder[y]) {
+      if (top === -1) top = y;
+      bottom = y;
+    }
+  }
+  return { top: top >= 0 ? top : 0, bottom: bottom >= 0 ? bottom : PANEL_H - 1 };
+}
+
+export function textWidthPx(text: string, scale: number): number {
+  let w = 0;
+  for (const ch of text) {
+    if (w > 0) w += SPACING * scale;
+    if (ch !== ' ') w += CHAR_W * scale;
+  }
+  return w;
+}
+
+export function paginateWords(text: string, maxW: number, scale: number): string[] {
+  const chunks: string[] = [];
+  const words = text.split(' ');
+  let cur: string[] = [];
+  let curW = 0;
+  for (const word of words) {
+    if (word.length === 0) continue;
+    const wordW = textWidthPx(word, scale);
+    if (cur.length === 0) {
+      cur.push(word);
+      curW = wordW;
+    } else {
+      const gapW = SPACING * scale;
+      if (curW + gapW + wordW > maxW) {
+        chunks.push(cur.join(' '));
+        cur = [word];
+        curW = wordW;
+      } else {
+        cur.push(word);
+        curW += gapW + wordW;
+      }
+    }
+  }
+  if (cur.length > 0) chunks.push(cur.join(' '));
+  return chunks.length > 0 ? chunks : [text];
+}
+
+export function subst(t: string, mockVars: Record<string, string>): string {
+  let r = t;
+  for (const [key, val] of Object.entries(mockVars)) {
+    r = r.replace(new RegExp(`\\{${key}\\}`, 'gi'), val);
+  }
+  return r;
+}
+
+function renderZoneDots(
+  zone: DisplayZone,
+  mockVars: Record<string, string>,
+  tick: number,
+): { x: number; y: number; color: string }[] {
   const zoneWidth = (zone.panelEnd - zone.panelStart + 1) * PANEL_W;
   const zoneX = getPanelX(zone.panelStart);
-  const isTwoLine = zone.lines.length === 2;
-  const scale = isTwoLine ? 1 : 2;
-  const charH = CHAR_H * scale;
-  const totalTextH = zone.lines.length * charH + (zone.lines.length - 1) * (isTwoLine ? 2 : 0);
-  const startY = Math.floor((PANEL_H - totalTextH) / 2);
-
   const dots: { x: number; y: number; color: string }[] = [];
 
+  const avail = getAvailableVRange(zone.borderRows);
+  const availH = avail.bottom - avail.top + 1;
+
+  const lineScales = zone.lines.map((line) => {
+    if (zone.lines.length === 2) return 1;
+    if (zone.scale) return zone.scale;
+    if (line.effect === 'SCROLL') return 2;
+    const tw2x = textWidthPx(subst(line.text, mockVars).toUpperCase(), 2);
+    return tw2x <= zoneWidth ? 2 : 1;
+  });
+
+  let totalTextH = 0;
+  const lineYOffsets: number[] = [];
+  for (let li = 0; li < zone.lines.length; li++) {
+    const mt = zone.lines[li].marginTop ?? 0;
+    const mb = zone.lines[li].marginBottom ?? (li < zone.lines.length - 1 ? 2 : 0);
+    lineYOffsets.push(totalTextH + mt);
+    totalTextH += mt + CHAR_H * lineScales[li] + mb;
+  }
+  const valign = zone.valign || 'middle';
+  let startY: number;
+  if (availH <= totalTextH) {
+    startY = avail.top;
+  } else if (valign === 'top') {
+    startY = avail.top;
+  } else if (valign === 'bottom') {
+    startY = avail.bottom - totalTextH + 1;
+  } else {
+    startY = Math.floor(avail.top + (availH - totalTextH) / 2);
+  }
+
   zone.lines.forEach((line, li) => {
-    const text = line.text.toUpperCase();
-    const textW = text.length * CELL_W * scale;
-    let xOff: number;
-    if (line.effect === 'STATIC' && textW <= zoneWidth) {
-      xOff = zoneX + Math.floor((zoneWidth - textW) / 2);
-    } else {
-      xOff = zoneX;
+    const scale = lineScales[li];
+    const text = subst(line.text.toUpperCase(), mockVars);
+    let displayText = text;
+    let displayW = textWidthPx(text, scale);
+    if (line.effect === 'paginate') {
+      const chunks = paginateWords(text, zoneWidth, scale);
+      const ci = Math.floor(tick / 30) % chunks.length;
+      displayText = chunks[ci];
+      displayW = textWidthPx(displayText, scale);
     }
-    const yOff = startY + li * (charH + (isTwoLine ? 2 : 0));
-    const rawDots = textToDots(text, 0, 0);
+    const textW = displayW;
+    const align = line.align || 'center';
+    if (line.effect === 'BLINK') {
+      const show = Math.floor(tick / 10) % 2 === 0;
+      if (!show) return;
+    }
+    let xOff: number;
+    if (line.effect === 'SCROLL') {
+      const speed = line.scrollSpeed ?? 1;
+      const loopW = textW + zoneWidth;
+      const offset = zoneWidth - ((tick * speed) % loopW);
+      xOff = zoneX + offset;
+    } else if (align === 'left') {
+      xOff = zoneX;
+    } else if (align === 'right') {
+      xOff = zoneX + zoneWidth - textW;
+    } else {
+      xOff = zoneX + Math.floor((zoneWidth - textW) / 2);
+    }
+
+    const yOff = startY + lineYOffsets[li];
+    const rawDots = textToDots(displayText, 0, 0);
     for (const d of rawDots) {
+      const px = xOff + d.x * scale;
+      const py = yOff + d.y * scale;
+      if (px < zoneX || px >= zoneX + zoneWidth) continue;
+      if (isBorderRow(py, zone.borderRows)) continue;
       dots.push({
-        x: xOff + d.x * scale,
-        y: yOff + d.y * scale,
+        x: px,
+        y: py,
         color: line.color || '#00FF00',
       });
     }
@@ -53,13 +173,48 @@ function renderZoneDots(zone: DisplayZone): { x: number; y: number; color: strin
   return dots;
 }
 
+function fmtTimer(totalSec: number): string {
+  const min = Math.floor(totalSec / 60);
+  const sec = totalSec % 60;
+  return `${min}:${sec.toString().padStart(2, '0')}`;
+}
+
+const TIMER_INIT_SEC = 600;
+
 export function P10Canvas({ zones, selectedZoneIndex, onZoneSelect }: Props) {
+  const [remainingSec, setRemainingSec] = useState(TIMER_INIT_SEC);
+  const [startTime] = useState(Date.now());
+  const [tick, setTick] = useState(0);
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      const elapsed = Math.floor((Date.now() - startTime) / 1000);
+      setRemainingSec(Math.max(0, TIMER_INIT_SEC - elapsed));
+    }, 1000);
+    return () => clearInterval(id);
+  }, [startTime]);
+
+  useEffect(() => {
+    const id = setInterval(() => setTick(t => t + 1), 50);
+    return () => clearInterval(id);
+  }, []);
+
+  const timerStr = fmtTimer(remainingSec);
+  const elapsedStr = fmtTimer(TIMER_INIT_SEC - remainingSec);
+  const mockVars: Record<string, string> = {
+    timer: timerStr,
+    elapsed: elapsedStr,
+    match_title: 'Juan | 2v2 Game',
+    next_match: 'Maria & Alex vs Tom',
+    next_wait: '5min',
+    next_booked_time: '2:30PM',
+    _tick: String(tick),
+  };
+
   const handleZoneClick = useCallback((e: React.MouseEvent, index: number) => {
     e.stopPropagation();
     onZoneSelect(index);
   }, [onZoneSelect]);
-
-  const allDots = zones.flatMap(renderZoneDots);
 
   return (
     <div
@@ -159,18 +314,59 @@ export function P10Canvas({ zones, selectedZoneIndex, onZoneSelect }: Props) {
               );
             })}
 
+            <defs>
+              {zones.map((zone, zi) => {
+                const zx = getPanelX(zone.panelStart);
+                const zw = (zone.panelEnd - zone.panelStart + 1) * PANEL_W;
+                return (
+                  <clipPath key={`zone-clip-${zi}`} id={`zone-clip-${zi}`}>
+                    <rect x={zx} y={0} width={zw} height={PANEL_H} />
+                  </clipPath>
+                );
+              })}
+            </defs>
             <g clipPath="url(#canvas-clip)" filter="url(#led-glow-canvas)">
-              {allDots.map((d, i) => (
-                <circle
-                  key={`dot-${i}`}
-                  cx={d.x + 0.5}
-                  cy={d.y + 0.5}
-                  r={0.4}
-                  fill={d.color}
-                  opacity={0.95}
-                />
-              ))}
+              {zones.map((zone, zi) => {
+                const zx = getPanelX(zone.panelStart);
+                const zw = (zone.panelEnd - zone.panelStart + 1) * PANEL_W;
+                const zoneDots = renderZoneDots(zone, mockVars, tick);
+                return (
+                  <g key={`zd-${zi}`} clipPath={`url(#zone-clip-${zi})`}>
+                    {zoneDots.map((d, i) => (
+                      <rect
+                        key={`dot-${zi}-${i}`}
+                        x={d.x + 0.1}
+                        y={d.y + 0.1}
+                        width={0.8}
+                        height={0.8}
+                        fill={d.color}
+                        opacity={0.95}
+                      />
+                    ))}
+                  </g>
+                );
+              })}
             </g>
+
+            {zones.map((zone, zi) => {
+              if (!zone.borderRows || zone.borderRows.length === 0) return null;
+              const zx = getPanelX(zone.panelStart);
+              const zw = (zone.panelEnd - zone.panelStart + 1) * PANEL_W;
+              return zone.borderRows.map((br, bri) => (
+                <rect
+                  key={`border-${zi}-${bri}`}
+                  x={zx}
+                  y={br.start}
+                  width={zw}
+                  height={br.end - br.start + 1}
+                  fill="rgba(255,0,0,0.08)"
+                  stroke="rgba(255,0,0,0.25)"
+                  strokeWidth={0.15}
+                  rx={0.1}
+                  pointerEvents="none"
+                />
+              ));
+            })}
 
             <rect
               width={TOTAL_W}

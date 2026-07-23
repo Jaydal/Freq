@@ -7,8 +7,8 @@ import { Toaster } from "@/components/ui/sonner";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Pickleball Court Management",
-  description: "Management Portal for Pickleball Courts",
+  title: "Paddle Point — Pickleball Court Management",
+  description: "Management Portal for Paddle Point Pickleball Courts — Solano, Nueva Vizcaya",
 };
 
 export default function RootLayout({
@@ -17,7 +17,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body className={inter.className}>
         <Providers>{children}</Providers>
         <Toaster />

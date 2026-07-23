@@ -13,16 +13,29 @@ static kiosk_board_t s_board;
 static bool s_have_board = false;
 static uint32_t s_board_version = 1;
 
+#ifdef ESP_PLATFORM
+#include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
+static SemaphoreHandle_t s_board_mutex = NULL;
+#define LOCK_BOARD()   if (s_board_mutex) xSemaphoreTake(s_board_mutex, portMAX_DELAY)
+#define UNLOCK_BOARD() if (s_board_mutex) xSemaphoreGive(s_board_mutex)
+#else
+#define LOCK_BOARD()
+#define UNLOCK_BOARD()
+#endif
+
 static void on_board_message(const char *topic, const char *payload, size_t len, void *user_data) {
   (void)topic; (void)user_data;
   kiosk_board_t *parsed = malloc(sizeof(kiosk_board_t));
   if (!parsed) return;
   if (board_parse(payload, len, parsed)) {
+    LOCK_BOARD();
     if (!s_have_board || memcmp(&s_board, parsed, sizeof(kiosk_board_t)) != 0) {
       s_board = *parsed;
       s_have_board = true;
       s_board_version++;
     }
+    UNLOCK_BOARD();
   }
   free(parsed);
 }
@@ -30,12 +43,15 @@ static void on_board_message(const char *topic, const char *payload, size_t len,
 // ── kiosk_data_provider_t implementation ────────────────────────────────────
 
 static void get_board(kiosk_board_t *out) {
+  LOCK_BOARD();
   if (s_have_board) *out = s_board;
   else memset(out, 0, sizeof(*out));
+  UNLOCK_BOARD();
 }
 
 static void get_court_options(court_option_t *out, uint8_t *count) {
   uint8_t n = 0;
+  LOCK_BOARD();
   if (s_have_board) {
     for (uint8_t i = 0; i < s_board.court_count && n < KIOSK_MAX_COURTS; i++) {
       const court_status_t *c = &s_board.courts[i];
@@ -46,16 +62,20 @@ static void get_court_options(court_option_t *out, uint8_t *count) {
       snprintf(o->status, sizeof(o->status), "%s", court_is_active(c) ? "Playing" : "Available");
     }
   }
+  UNLOCK_BOARD();
   *count = n;
 }
 
 static void get_products_config(kiosk_products_config_t *out) {
   /* Durations/rates come from the board's config (from the API). Fall back to
    * seed defaults only if the board hasn't been received yet. */
+  LOCK_BOARD();
   if (s_have_board && s_board.config.duration_count > 0) {
     *out = s_board.config;
+    UNLOCK_BOARD();
     return;
   }
+  UNLOCK_BOARD();
   memset(out, 0, sizeof(*out));
   const int32_t durations[] = { 30, 60, 90 };
   const int32_t rates[] = { 150, 300, 450 };
@@ -72,14 +92,20 @@ static bool lookup_member(const char *rfid, kiosk_member_t *out) {
 static member_state_t check_member_state(const char *member_id,
                                          kiosk_error_t *out_error) {
   (void)out_error;
-  if (!s_have_board) return MEMBER_STATE_NONE;
+  LOCK_BOARD();
+  if (!s_have_board) {
+    UNLOCK_BOARD();
+    return MEMBER_STATE_NONE;
+  }
 
   for (uint8_t i = 0; i < s_board.queue_count; i++) {
     if (strcmp(s_board.queue[i].member_id, member_id) == 0) {
+      UNLOCK_BOARD();
       return MEMBER_STATE_HAS_WAITING;
     }
   }
 
+  UNLOCK_BOARD();
   return MEMBER_STATE_NONE;
 }
 
@@ -118,20 +144,31 @@ static bool join_queue(const char *member_id, const char *court_id, game_type_t 
 }
 
 static void cancel_waiting(const char *member_id) {
-  if (!s_have_board) return;
+  LOCK_BOARD();
+  if (!s_have_board) {
+    UNLOCK_BOARD();
+    return;
+  }
   for (uint8_t i = 0; i < s_board.queue_count; i++) {
     if (strcmp(s_board.queue[i].member_id, member_id) == 0) {
       freq_rest_cancel_queue(s_board.queue[i].id);
       break;
     }
   }
+  UNLOCK_BOARD();
 }
 static bool is_ready(void) {
-  return s_have_board;
+  LOCK_BOARD();
+  bool ready = s_have_board;
+  UNLOCK_BOARD();
+  return ready;
 }
 
 static uint32_t get_board_version(void) {
-  return s_board_version;
+  LOCK_BOARD();
+  uint32_t version = s_board_version;
+  UNLOCK_BOARD();
+  return version;
 }
 
 static const kiosk_data_provider_t s_live_provider = {
@@ -149,8 +186,16 @@ static const kiosk_data_provider_t s_live_provider = {
 void live_data_provider_start(const char *server_url, const char *api_key,
                               const char *mqtt_broker, const char *mqtt_user,
                               const char *mqtt_pass) {
+#ifdef ESP_PLATFORM
+  if (!s_board_mutex) {
+    s_board_mutex = xSemaphoreCreateMutex();
+  }
+#endif
+
+  LOCK_BOARD();
   memset(&s_board, 0, sizeof(s_board));
   s_have_board = false;
+  UNLOCK_BOARD();
 
   freq_rest_init((server_url && server_url[0]) ? server_url : "http://localhost:3000",
                  (api_key && api_key[0]) ? api_key : NULL);

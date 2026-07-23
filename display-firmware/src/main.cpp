@@ -133,6 +133,12 @@ void setup() {
   g_mqtt->begin(ssid.c_str(), pass.c_str(), broker.c_str(), port,
                 court.c_str(), user.c_str(), mpwd.c_str());
   digitalWrite(STATUS_LED, g_mqtt->isOnline() ? HIGH : LOW);
+
+  log_i("[main] === BOOT COMPLETE ===");
+  log_i("[main] WiFi:  %s (%d dBm)", WiFi.localIP().toString().c_str(), WiFi.RSSI());
+  log_i("[main] MQTT:  %s", g_mqtt->isOnline() ? "connected" : "disconnected");
+  log_i("[main] Court: %s", court.c_str());
+  log_i("[main] Subscribed to: courts/%s/display", court.c_str());
 }
 
 void loop() {

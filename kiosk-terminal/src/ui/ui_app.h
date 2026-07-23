@@ -8,5 +8,8 @@
  * from the saved kiosk_config; */
 void ui_app_init(void);
 
-/* Inject a hardware NFC scan directly into the LVGL event loop thread-safely */
+/* Call this when RFID is scanned in the background (e.g. from MQTT or UART) */
 void ui_app_handle_scan(const char *rfid);
+
+/* Force a complete re-render of the current step (e.g. after theme change) */
+void ui_app_force_render(void);

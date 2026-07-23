@@ -46,4 +46,53 @@ describe('Sports Caster Payload Generator', () => {
     expect(payload.display.pages[0].text).toContain('Court A');
     expect(payload.display.pages[1].text).toContain('5 IN QUEUE');
   });
+
+  it('passes through new per-line fields in zone payloads', () => {
+    const payload = generatePayload('court-1', { current: null, upcoming: [] }, {
+      displaySequence: {
+        idle: { interval: 10, pages: [{
+          zones: [{
+            panelStart: 0,
+            panelEnd: 2,
+            lines: [{
+              text: 'test',
+              color: '#00FF00',
+              effect: 'SCROLL',
+              align: 'left',
+              scrollSpeed: 2,
+              marginTop: 1,
+              marginBottom: 3,
+            }],
+          }],
+        }] },
+        prep: { interval: 10, pages: [] },
+        game: { interval: 10, pages: [] },
+      },
+    });
+
+    const zone = payload.display.pages[0].zones?.[0];
+    expect(zone).toBeDefined();
+    expect(zone!.lines[0].scrollSpeed).toBe(2);
+    expect(zone!.lines[0].marginTop).toBe(1);
+    expect(zone!.lines[0].marginBottom).toBe(3);
+    expect(zone!.lines[0].align).toBe('left');
+  });
+
+  it('substitutes nextWait and nextBookedTime in custom sequences', () => {
+    const payload = generatePayload('court-1', { current: null, upcoming: [] }, {
+      nextWait: '5min',
+      nextBookedTime: '2:30PM',
+      displaySequence: {
+        idle: { interval: 10, pages: [
+          { text: 'Wait: {next_wait}' },
+          { text: 'Next: {next_booked_time}' },
+        ] },
+        prep: { interval: 10, pages: [] },
+        game: { interval: 10, pages: [] },
+      },
+    });
+
+    expect(payload.display.pages[0].text).toBe('Wait: 5min');
+    expect(payload.display.pages[1].text).toBe('Next: 2:30PM');
+  });
 });

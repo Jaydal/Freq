@@ -3,5 +3,5 @@ import { openApiSpec } from '@/lib/api/openapi';
 
 export const GET = ApiReference({
   spec: { content: openApiSpec },
-  pageTitle: 'Freq API Reference',
+  pageTitle: 'Paddle Point API Reference',
 });

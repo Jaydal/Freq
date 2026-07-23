@@ -32,10 +32,10 @@ static void big_timer_refresh_cb(lv_event_t *e) {
   
   char time_buf[8];
   kiosk_format_time(time_buf, sizeof(time_buf), remaining);
-  char big_buf[16];
+  char big_buf[32];
   snprintf(big_buf, sizeof(big_buf), "%s %s", time_buf, phase == COURT_PHASE_PREPARING ? "PREP" : "LEFT");
   lv_label_set_text(label, big_buf);
-  lv_obj_set_style_text_color(label, phase == COURT_PHASE_PREPARING ? KIOSK_COLOR_AMBER_400 : KIOSK_COLOR_EMERALD_400, 0);
+  lv_obj_set_style_text_color(label, phase == COURT_PHASE_PREPARING ? kiosk_theme_color_warning() : kiosk_theme_color_success(), 0);
 }
 
 static void sub_timer_refresh_cb(lv_event_t *e) {
@@ -57,7 +57,7 @@ static void sub_timer_refresh_cb(lv_event_t *e) {
   if (phase == COURT_PHASE_PREPARING) {
     char prep_left[8];
     kiosk_format_time(prep_left, sizeof(prep_left), prep_sec - elapsed);
-    snprintf(sub_buf, sizeof(sub_buf), "Game starts in %s", prep_left);
+    snprintf(sub_buf, sizeof(sub_buf), "Starts in %s", prep_left);
   } else {
     char elapsed_buf[8], game_buf[8];
     kiosk_format_time(elapsed_buf, sizeof(elapsed_buf), elapsed);
@@ -93,17 +93,17 @@ lv_obj_t *court_status_card_create(lv_obj_t *parent, const court_status_t *court
   lv_obj_set_flex_flow(header, LV_FLEX_FLOW_ROW);
   lv_obj_set_flex_align(header, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 
-  set_label(header, court->name, &lv_font_montserrat_16, KIOSK_COLOR_ZINC_100);
+  set_label(header, court->name, &lv_font_montserrat_16, kiosk_theme_color_text_strong());
 
   if (court_is_active(court)) {
-    set_label(header, phase == COURT_PHASE_PREPARING ? "Preparing" : "In Game", &lv_font_montserrat_14,
-               phase == COURT_PHASE_PREPARING ? KIOSK_COLOR_AMBER_400 : KIOSK_COLOR_EMERALD_400);
+    set_label(header, phase == COURT_PHASE_PREPARING ? "PREPARING" : "IN GAME", &lv_font_montserrat_14,
+               phase == COURT_PHASE_PREPARING ? kiosk_theme_color_warning() : kiosk_theme_color_success());
   } else {
-    set_label(header, "Available", &lv_font_montserrat_14, KIOSK_COLOR_EMERALD_400);
+    set_label(header, "AVAILABLE", &lv_font_montserrat_14, kiosk_theme_color_success());
   }
 
   if (court->match_title[0] != '\0') {
-    set_label(card, court->match_title, &lv_font_montserrat_14, KIOSK_COLOR_ZINC_400);
+    set_label(card, court->match_title, &lv_font_montserrat_14, kiosk_theme_color_text_muted());
   }
 
   if (court_is_active(court)) {
@@ -121,24 +121,24 @@ lv_obj_t *court_status_card_create(lv_obj_t *parent, const court_status_t *court
 
     char time_buf[8];
     kiosk_format_time(time_buf, sizeof(time_buf), remaining);
-    char big_buf[16];
+    char big_buf[32];
     snprintf(big_buf, sizeof(big_buf), "%s %s", time_buf, phase == COURT_PHASE_PREPARING ? "PREP" : "LEFT");
     lv_obj_t *lbl_big = set_label(timer_box, big_buf, &lv_font_montserrat_32,
-               phase == COURT_PHASE_PREPARING ? KIOSK_COLOR_AMBER_400 : KIOSK_COLOR_EMERALD_400);
+               phase == COURT_PHASE_PREPARING ? kiosk_theme_color_warning() : kiosk_theme_color_success());
     lv_obj_add_event_cb(lbl_big, big_timer_refresh_cb, LV_EVENT_REFRESH, (void *)(uintptr_t)court_idx);
 
     char sub_buf[64];
     if (phase == COURT_PHASE_PREPARING) {
       char prep_left[8];
       kiosk_format_time(prep_left, sizeof(prep_left), prep_sec - elapsed);
-      snprintf(sub_buf, sizeof(sub_buf), "Game starts in %s", prep_left);
+      snprintf(sub_buf, sizeof(sub_buf), "Starts in %s", prep_left);
     } else {
       char elapsed_buf[8], game_buf[8];
       kiosk_format_time(elapsed_buf, sizeof(elapsed_buf), elapsed);
       kiosk_format_time(game_buf, sizeof(game_buf), elapsed - prep_sec);
       snprintf(sub_buf, sizeof(sub_buf), "Elapsed %s | Game %s", elapsed_buf, game_buf);
     }
-    lv_obj_t *lbl_sub = set_label(timer_box, sub_buf, &lv_font_montserrat_14, KIOSK_COLOR_ZINC_500);
+    lv_obj_t *lbl_sub = set_label(timer_box, sub_buf, &lv_font_montserrat_14, kiosk_theme_color_text_muted());
     lv_obj_add_event_cb(lbl_sub, sub_timer_refresh_cb, LV_EVENT_REFRESH, (void *)(uintptr_t)court_idx);
 
     if (court->player_count > 0) {
@@ -154,19 +154,19 @@ lv_obj_t *court_status_card_create(lv_obj_t *parent, const court_status_t *court
         char name_buf[64];
         snprintf(name_buf, sizeof(name_buf), "%s %s", court->players[i].first_name, court->players[i].last_name);
         lv_obj_t *chip = lv_obj_create(chips);
-        lv_obj_set_style_bg_color(chip, KIOSK_COLOR_ZINC_800, 0);
+        lv_obj_set_style_bg_color(chip, kiosk_theme_color_bg(), 0);
         lv_obj_set_style_bg_opa(chip, LV_OPA_COVER, 0);
         lv_obj_set_style_radius(chip, 4, 0);
         lv_obj_set_style_pad_hor(chip, 8, 0);
         lv_obj_set_style_pad_ver(chip, 2, 0);
         lv_obj_set_style_border_width(chip, 0, 0);
         lv_obj_set_size(chip, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
-        set_label(chip, name_buf, &lv_font_montserrat_14, KIOSK_COLOR_ZINC_300);
+        set_label(chip, name_buf, &lv_font_montserrat_14, kiosk_theme_color_text());
       }
       if (court->player_count > 2) {
         char more_buf[16];
         snprintf(more_buf, sizeof(more_buf), "+%d", court->player_count - 2);
-        set_label(chips, more_buf, &lv_font_montserrat_14, KIOSK_COLOR_ZINC_500);
+        set_label(chips, more_buf, &lv_font_montserrat_14, kiosk_theme_color_text_muted());
       }
     }
   }

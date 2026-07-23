@@ -230,19 +230,9 @@ static void lcd_panel_init(void) {
 
 static void disp_flush_cb(lv_disp_drv_t *drv, const lv_area_t *area,
                             lv_color_t *color_p) {
-  /* Hand the rendered framebuffer to the RGB controller. */
-  esp_lcd_panel_draw_bitmap(s_panel,
-                            area->x1, area->y1,
-                            area->x2 + 1, area->y2 + 1,
-                            color_p);
-
-  /* Block THIS LVGL task until the RGB bounce frame finishes transmitting
-   * (VSYNC). Because we use a full-screen draw buffer, this only happens ONCE
-   * per frame, rather than chunk-by-chunk. This prevents tearing and avoids
-   * stalling the LVGL task. */
-  ulTaskNotifyValueClear(NULL, ULONG_MAX);
-  ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-
+  /* In direct_mode = 1, LVGL draws directly into the PSRAM framebuffer. 
+   * The ESP32 RGB peripheral continuously scans out this buffer via DMA. 
+   * We just need to tell LVGL we are done. */
   lv_disp_flush_ready(drv);
 }
 
@@ -251,27 +241,15 @@ static void lvgl_display_init(void) {
   void *fb0 = NULL;
   ESP_ERROR_CHECK(esp_lcd_rgb_panel_get_frame_buffer(s_panel, 1, &fb0));
 
-  /* Use a full-screen scratchpad draw buffer allocated in PSRAM.
-   * This leaves internal SRAM free for MbedTLS / WiFi, and because it's full
-   * screen, disp_flush_cb is only called ONCE per frame. This avoids the massive
-   * chunking overhead and VSYNC stalls while completely preventing layer
-   * flickering (since LVGL fully composites the screen in PSRAM first). */
-  const uint32_t buf_lines = LCD_V_RES; /* Full screen: 1024 * 600 * 2 = ~1.2MB */
-  lv_color_t *draw_buf = heap_caps_malloc(LCD_H_RES * buf_lines * sizeof(lv_color_t),
-                                          MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-  if (!draw_buf) {
-      ESP_LOGE(TAG, "Failed to allocate full-screen draw buffer in PSRAM!");
-      abort();
-  }
-
-  lv_disp_draw_buf_init(&s_draw_buf, draw_buf, NULL, LCD_H_RES * buf_lines);
+  /* AGENTS.md constraint: Use single PSRAM framebuffer with direct_mode = 1 */
+  lv_disp_draw_buf_init(&s_draw_buf, fb0, NULL, LCD_H_RES * LCD_V_RES);
 
   lv_disp_drv_init(&s_disp_drv);
   s_disp_drv.hor_res    = LCD_H_RES;
   s_disp_drv.ver_res    = LCD_V_RES;
   s_disp_drv.flush_cb   = disp_flush_cb;
   s_disp_drv.draw_buf   = &s_draw_buf;
-  s_disp_drv.direct_mode = 0;
+  s_disp_drv.direct_mode = 1;
   lv_disp_drv_register(&s_disp_drv);
 
   /* Unblock the LVGL task (parked in disp_flush_cb) when the RGB bounce frame
