@@ -197,6 +197,14 @@ void setup() {
   LOG("[main] Loaded settings: SSID='%s', Broker='%s:%d', CourtID='%s', User='%s', Brightness=%d, Color=%s\n",
                 ssid.c_str(), broker.c_str(), port, court.c_str(), user.c_str(), brightness, colorHex.c_str());
 
+  g_mqtt->setCourtChangeCallback([](const char* newCourtId) {
+    LOG("[mqtt] Reassigning court: '%s' -> '%s' — saving and rebooting...\n",
+        g_portal.getCourtId().c_str(), newCourtId);
+    g_portal.saveField("court_id", String(newCourtId));
+    delay(500);
+    ESP.restart();
+  });
+
   g_mqtt->begin(ssid.c_str(), pass.c_str(), broker.c_str(), port,
                 court.c_str(), user.c_str(), mpwd.c_str());
   digitalWrite(STATUS_LED, g_mqtt->isOnline() ? HIGH : LOW);

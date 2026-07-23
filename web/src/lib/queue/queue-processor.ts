@@ -203,6 +203,9 @@ export async function completeExpiredGames(): Promise<string[]> {
       if (v) displaySequence = JSON.parse(v);
     } catch {}
 
+    const rawPrepSec = parseInt(settings?.find(s => s.key === 'preparationTime')?.value ?? '300', 10);
+    const prepTimeSec = isNaN(rawPrepSec) ? 300 : rawPrepSec;
+
     const { data: courts } = await supabase
       .from('courts')
       .select('id, name')
@@ -225,6 +228,7 @@ export async function completeExpiredGames(): Promise<string[]> {
         courtName: court.name,
         queueCount: courtQueueCounts.get(court.id) ?? 0,
         displaySequence,
+        prepTimeSec,
       });
       publishDisplay(court.id, payload);
     }

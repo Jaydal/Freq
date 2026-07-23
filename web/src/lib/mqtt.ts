@@ -248,8 +248,8 @@ export function publishDiscover(): void {
 }
 
 export async function collectDiscoveryResponses(timeoutMs = 3000): Promise<DisplayInfo[]> {
-  const gen = g._discoveryGeneration!;
   publishDiscover();
+  const gen = g._discoveryGeneration!;
   await new Promise(resolve => setTimeout(resolve, timeoutMs));
   if (gen !== g._discoveryGeneration) return [];
   return Array.from(g._discoveryResponses!.values());

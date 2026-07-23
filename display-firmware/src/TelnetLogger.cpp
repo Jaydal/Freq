@@ -30,9 +30,8 @@ WiFiClient* TelnetLogger::client() {
 
 void TelnetLogger::begin(uint16_t port) {
   s_instance = this;
-  _server.~WiFiServer();
-  new (&_server) WiFiServer(port);
-  _server.begin();
+  _server.close();
+  _server.begin(port);
   _active = true;
 
   esp_log_set_vprintf(custom_vprintf);
