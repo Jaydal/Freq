@@ -32,6 +32,7 @@ const groups = [
     items: [
       { href: '/settings', label: 'Settings', icon: Settings },
       { href: '/health', label: 'Health', icon: HeartPulse },
+      { href: '/leds', label: 'LED Displays', icon: Monitor },
       { href: '/api/docs', label: 'API Docs', icon: BookOpen, external: true },
     ],
   },
