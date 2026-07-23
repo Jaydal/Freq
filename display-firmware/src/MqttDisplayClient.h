@@ -8,12 +8,18 @@
 #include <vector>
 #include <string>
 
-struct ZoneLine {
+struct SubPage {
   std::string text;
   std::string color;
+  std::string bgColor;
   std::string effect;
   std::string align;
   float scrollSpeed;
+  uint16_t durationMs;
+};
+
+struct ZoneLine {
+  std::vector<SubPage> subpages;
   uint8_t marginTop;
   uint8_t marginBottom;
 };
@@ -85,6 +91,8 @@ private:
   std::vector<DisplayPage> _playlist;
   size_t _currentPageIndex = 0;
   unsigned long _lastPageChangeTime = 0;
+  uint8_t _subpageIdx[3][2];
+  unsigned long _lastSubChange[3][2];
 
   void applyCurrentPage();
   void handleDiscover();
