@@ -201,10 +201,21 @@ void Hub75Driver::setZones(const ZoneRenderInfo* zones, uint8_t count) {
       dst.lines[li].scrollSpeed = src.lines[li].scrollSpeed;
       dst.lines[li].marginTop = src.lines[li].marginTop;
       dst.lines[li].marginBottom = src.lines[li].marginBottom;
+      dst.lines[li].hasBgColor = src.lines[li].hasBgColor;
+      dst.lines[li].bgR = src.lines[li].bgR;
+      dst.lines[li].bgG = src.lines[li].bgG;
+      dst.lines[li].bgB = src.lines[li].bgB;
 
       int zoneW = (src.panelEnd - src.panelStart + 1) * WF2_PANEL_W;
-      int s = (src.lineCount == 2) ? 1 : 2;
-      if (dst.scale > 0) s = dst.scale;
+      int s;
+      if (dst.scale > 0) {
+        s = dst.scale;
+      } else if (src.lineCount == 2) {
+        int tw2x = textWidth5x7Scaled(src.lines[li].text.c_str(), 2);
+        s = (tw2x <= zoneW) ? 2 : 1;
+      } else {
+        s = 2;
+      }
       int tw = textWidth5x7Scaled(src.lines[li].text.c_str(), s);
       dst.lines[li].scrollX = (tw > zoneW && src.lines[li].effect == "SCROLL") ? zoneW : 0;
       dst.lines[li].scrollLastTick = millis();
@@ -395,6 +406,40 @@ void Hub75Driver::redraw() {
         x = zoneX + (zoneW - tw) / 2;
       }
 
+      if (line.hasBgColor) {
+        uint16_t bgCol = _matrix->color565(line.bgR, line.bgG, line.bgB);
+        int textW = textWidth5x7Scaled(display.c_str(), scale);
+        int bgY = lineY[li];
+        int bgH = CHAR_H * scale;
+        int bgX;
+        if (overflows) {
+          bgX = x;
+        } else if (align == "left") {
+          bgX = zoneX;
+        } else if (align == "right") {
+          bgX = zoneX + zoneW - textW;
+        } else {
+          bgX = zoneX + (zoneW - textW) / 2;
+        }
+        for (int dy = 0; dy < bgH; dy++) {
+          for (int dx = 0; dx < textW; dx++) {
+            int px = bgX + dx;
+            int py = bgY + dy;
+            bool isBorder = false;
+            for (uint8_t i = 0; i < z.borderCount; i++) {
+              if (py >= z.borderRanges[i].start && py <= z.borderRanges[i].end) {
+                isBorder = true;
+                break;
+              }
+            }
+            if (isBorder) continue;
+            if (px >= zoneX && px < zoneXEnd && py >= 0 && py < WF2_RES_Y) {
+              drawPixelMapped(px, py, bgCol);
+            }
+          }
+        }
+      }
+
       drawText5x7Scaled(display.c_str(), x, lineY[li], line.color, scale, zoneX, zoneXEnd, z.borderCount, z.borderRanges);
     }
   }
@@ -446,7 +491,7 @@ void Hub75Driver::drawText5x7Scaled(const char* s, int x, int y, uint16_t color,
         }
       }
     }
-    cursor += (*p == ' ') ? SPACING * scale : CELL_W * scale;
+    cursor += (*p == ' ') ? 0 : CELL_W * scale;
   }
 }
 

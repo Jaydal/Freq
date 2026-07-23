@@ -44,6 +44,8 @@ private:
       float scrollSpeed;
       uint8_t marginTop;
       uint8_t marginBottom;
+      bool hasBgColor = false;
+      uint8_t bgR = 0, bgG = 0, bgB = 0;
     } lines[MAX_LINES_PER_ZONE];
     bool hasData;
     uint8_t scale;
