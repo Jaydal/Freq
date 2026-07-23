@@ -11,6 +11,7 @@ interface Props {
   onPageSelect: (index: number) => void;
   onAddPage: () => void;
   onRemovePage: () => void;
+  onDuplicatePage: () => void;
   onDurationChange: (seconds: number) => void;
 }
 
@@ -22,6 +23,7 @@ export function PageToolbar({
   onPageSelect,
   onAddPage,
   onRemovePage,
+  onDuplicatePage,
   onDurationChange,
 }: Props) {
   return (
@@ -57,6 +59,15 @@ export function PageToolbar({
           &times;
         </Button>
       )}
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={onDuplicatePage}
+        className="h-6 px-2 text-xs"
+        title="Duplicate current page"
+      >
+        D
+      </Button>
       <div className="ml-auto flex items-center gap-2">
         <span className="text-xs text-zinc-500">Duration:</span>
         <Input

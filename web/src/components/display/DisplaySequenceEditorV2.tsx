@@ -394,6 +394,18 @@ export function DisplaySequenceEditorV2({ sequence: initial }: Props) {
           }));
           setCurrentPage(prev => Math.min(prev, section.pages.length - 2));
         }}
+        onDuplicatePage={() => {
+          updateSection(s => ({
+            ...s,
+            pages: [
+              ...s.pages.slice(0, pageIdx + 1),
+              JSON.parse(JSON.stringify(s.pages[pageIdx])),
+              ...s.pages.slice(pageIdx + 1),
+            ],
+          }));
+          setCurrentPage(pageIdx + 1);
+          setSelectedZone(0);
+        }}
         onDurationChange={sec => {
           updateSection(s => ({
             ...s,
