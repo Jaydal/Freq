@@ -135,12 +135,64 @@ void MqttDisplayClient::update() {
     }
   }
 
+  // Override page rotation
+  if (_overrideActive && !_overridePages.empty()) {
+    unsigned long now = millis();
+    size_t oIdx = _overridePageIndex % _overridePages.size();
+    unsigned long pageDuration = (unsigned long)(_overridePages[oIdx].durationSeconds * 1000);
+    if (pageDuration == 0) pageDuration = 10000;
+    if (now - _overridePageChangeTime >= pageDuration) {
+      _overridePageChangeTime = now;
+      _overridePageIndex = (_overridePageIndex + 1) % _overridePages.size();
+      applyCurrentPage();
+    }
+  }
+
   _driver.update();
 }
 
 // ── Private ───────────────────────────────────────────────────────────────────
 
 void MqttDisplayClient::applyCurrentPage() {
+  // Override takes priority over playlist
+  if (_overrideActive && !_overridePages.empty()) {
+    size_t idx = _overridePageIndex % _overridePages.size();
+    const DisplayPage& page = _overridePages[idx];
+    if (page.zoneCount == 0) {
+      _driver.clear();
+      return;
+    }
+    ZoneRenderInfo rz[3];
+    for (int zi = 0; zi < page.zoneCount && zi < 3; zi++) {
+      rz[zi].panelStart = page.zones[zi].panelStart;
+      rz[zi].panelEnd = page.zones[zi].panelEnd;
+      rz[zi].lineCount = page.zones[zi].lineCount;
+      rz[zi].scale = page.zones[zi].scale;
+      rz[zi].valign = page.zones[zi].valign.c_str();
+      rz[zi].borderCount = page.zones[zi].borderCount;
+      for (int bri = 0; bri < page.zones[zi].borderCount && bri < 4; bri++) {
+        rz[zi].borderRanges[bri] = page.zones[zi].borderRanges[bri];
+      }
+      for (int li = 0; li < page.zones[zi].lineCount && li < 2; li++) {
+        const auto& srcLine = page.zones[zi].lines[li];
+        rz[zi].lines[li].text = srcLine.text.c_str();
+        uint8_t r = 0, g = 255, b = 0;
+        parseHexColor(srcLine.color, r, g, b);
+        rz[zi].lines[li].r = r;
+        rz[zi].lines[li].g = g;
+        rz[zi].lines[li].b = b;
+        rz[zi].lines[li].effect = srcLine.effect.c_str();
+        rz[zi].lines[li].align = srcLine.align.c_str();
+        rz[zi].lines[li].scrollSpeed = srcLine.scrollSpeed;
+        rz[zi].lines[li].marginTop = srcLine.marginTop;
+        rz[zi].lines[li].marginBottom = srcLine.marginBottom;
+      }
+    }
+    _driver.setZones(rz, page.zoneCount);
+    return;
+  }
+
+  // Normal playlist logic
   if (_currentPageIndex >= _playlist.size()) return;
 
   const auto& page = _playlist[_currentPageIndex];
