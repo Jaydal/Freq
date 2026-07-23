@@ -38,16 +38,30 @@ export interface DisplayPayload {
   };
 }
 
+export interface DisplayInfo {
+  mac: string;
+  ip: string;
+  courtId: string;
+  rssi: number;
+  heap: number;
+  overrideActive: boolean;
+  lastSeen: number;
+}
+
 const g = global as typeof globalThis & {
   _mqttClient?: MqttClient;
   _mqttConnected?: boolean;
   _courtStatuses?: Map<string, CourtStatus>;
   _displayStates?: Map<string, DisplayPayload>;
   _connectingPromise?: Promise<MqttClient | null> | null;
+  _discoveryResponses?: Map<string, DisplayInfo>;
+  _discoveryGeneration?: number;
 };
 
 if (!g._courtStatuses) g._courtStatuses = new Map();
 if (!g._displayStates) g._displayStates = new Map();
+if (!g._discoveryResponses) g._discoveryResponses = new Map();
+if (!g._discoveryGeneration) g._discoveryGeneration = 0;
 
 export async function connectMqtt(): Promise<MqttClient | null> {
   const url = process.env.MQTT_BROKER_URL;
@@ -75,6 +89,7 @@ export async function connectMqtt(): Promise<MqttClient | null> {
       g._mqttClient?.subscribe('freq.led/courts/+/status', { qos: 1 });
       g._mqttClient?.subscribe('courts/+/status', { qos: 1 });
       g._mqttClient?.subscribe('courts/+/display', { qos: 1 });
+      g._mqttClient?.subscribe('freq/display/discover/response', { qos: 1 });
       console.log('[mqtt] broker connected');
     });
 
@@ -86,6 +101,24 @@ export async function connectMqtt(): Promise<MqttClient | null> {
     });
 
     g._mqttClient.on('message', (topic: string, payload: Buffer) => {
+      // Discovery response
+      if (topic === 'freq/display/discover/response') {
+        try {
+          const data = JSON.parse(payload.toString());
+          const info: DisplayInfo = {
+            mac: data.mac,
+            ip: data.ip,
+            courtId: data.courtId,
+            rssi: data.rssi,
+            heap: data.heap,
+            overrideActive: data.overrideActive ?? false,
+            lastSeen: Date.now(),
+          };
+          g._discoveryResponses!.set(info.mac, info);
+        } catch { /* ignore malformed */ }
+        return;
+      }
+
       const statusMatch = topic.match(/^(?:freq\.led\/)?courts\/(.+)\/status$/);
       if (statusMatch) {
         try {
@@ -177,6 +210,10 @@ export function getAllDisplayStates(): Record<string, DisplayPayload> {
   return Object.fromEntries(g._displayStates ?? []);
 }
 
+export function getMqttClient(): MqttClient | null {
+  return g._mqttClient ?? null;
+}
+
 // ── Publisher ─────────────────────────────────────────────────────────────────
 
 // Publishes the full board snapshot for the firmware kiosk (retained, so a
@@ -200,6 +237,29 @@ export async function publishBoard(snapshotJson: string): Promise<boolean> {
     console.error('[mqtt] publishBoard error:', err);
     return false;
   }
+}
+
+export function publishDiscover(): void {
+  const c = g._mqttClient;
+  if (!c || !g._mqttConnected) return;
+  g._discoveryGeneration!++;
+  g._discoveryResponses!.clear();
+  c.publish('freq/display/discover', '{}', { qos: 1 });
+}
+
+export async function collectDiscoveryResponses(timeoutMs = 3000): Promise<DisplayInfo[]> {
+  const gen = g._discoveryGeneration!;
+  publishDiscover();
+  await new Promise(resolve => setTimeout(resolve, timeoutMs));
+  if (gen !== g._discoveryGeneration) return [];
+  return Array.from(g._discoveryResponses!.values());
+}
+
+export function publishCommand(mac: string, command: Record<string, unknown>): void {
+  const c = g._mqttClient;
+  if (!c || !g._mqttConnected) return;
+  const topic = `freq/display/cmd/${mac}`;
+  c.publish(topic, JSON.stringify(command), { qos: 1 });
 }
 
 export async function publishDisplay(courtId: string, payload: DisplayPayload): Promise<boolean> {
