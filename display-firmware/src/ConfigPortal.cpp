@@ -98,6 +98,22 @@ bool ConfigPortal::saveFields(const String& ssid, const String& pass, const Stri
   return bytes > 0;
 }
 
+bool ConfigPortal::saveField(const String& key, const String& value) {
+  if (!_prefs.begin("freq-config", false)) return false;
+  bool ok = _prefs.putString(key.c_str(), value) > 0;
+  _prefs.end();
+  if (ok) loadFields();
+  return ok;
+}
+
+bool ConfigPortal::saveField(const String& key, uint8_t value) {
+  if (!_prefs.begin("freq-config", false)) return false;
+  bool ok = _prefs.putUChar(key.c_str(), value) > 0;
+  _prefs.end();
+  if (ok) loadFields();
+  return ok;
+}
+
 bool ConfigPortal::isConfigured() {
   if (!loadFields()) {
 #ifdef WIFI_SSID
@@ -115,7 +131,7 @@ bool ConfigPortal::isConfigured() {
   bool has = (_wifiSsid.length() > 0 && _courtId.length() > 0);
 #ifdef WIFI_SSID
   if (!has && String(WIFI_SSID).length() > 0 && String(WIFI_SSID) != "your_venue_wifi_name") {
-    Serial.printf("[portal] Using compile-time config SSID='%s'\n", WIFI_SSID);
+    log_i("[portal] Using compile-time config SSID='%s'", WIFI_SSID);
     return true;
   }
 #endif

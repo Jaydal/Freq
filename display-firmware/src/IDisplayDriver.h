@@ -42,5 +42,6 @@ public:
   virtual void setTimer(unsigned long remainingMs, unsigned long totalMs, unsigned long baseMs) {}
   virtual void setZones(const ZoneRenderInfo* zones, uint8_t count) {}
   virtual void runDiagnosticSequence() {}
+  virtual void setOtaActive(bool active) {}
   virtual ~IDisplayDriver() = default;
 };

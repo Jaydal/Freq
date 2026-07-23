@@ -18,6 +18,7 @@ public:
   void setTimer(unsigned long remainingMs, unsigned long totalMs, unsigned long baseMs) { _timerRemainingAtBaseMs = remainingMs; _timerTotalMs = totalMs; _timerBaseMs = baseMs; }
   void setZones(const ZoneRenderInfo* zones, uint8_t count) override;
   void runDiagnosticSequence() override;
+  void setOtaActive(bool active) override { _otaActive = active; if (active) _matrix->clearScreen(); }
 
 private:
   MatrixPanel_I2S_DMA* _matrix;
@@ -58,6 +59,9 @@ private:
   String _fallbackText;
   int _fallbackScrollX;
   unsigned long _fallbackScrollTick;
+
+  // OTA safety — suppress DMA during firmware updates
+  volatile bool _otaActive = false;
 
   // Timer countdown
   unsigned long _timerRemainingAtBaseMs = 0;

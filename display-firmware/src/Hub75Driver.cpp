@@ -80,7 +80,13 @@ static int glyphIndex(char c) {
   return -1;
 }
 
-// isBorderRow removed to optimize per-pixel loop
+static bool isBorderRow(int y, uint8_t borderCount, const BorderRange* borderRanges) {
+  if (borderCount > 4) borderCount = 4;
+  for (uint8_t i = 0; i < borderCount; i++) {
+    if (y >= borderRanges[i].start && y <= borderRanges[i].end) return true;
+  }
+  return false;
+}
 
 Hub75Driver::Hub75Driver()
   : _matrix(nullptr), _defaultColor(0xF800), _scrollTickMs(45), _animMode("scroll"),
@@ -101,7 +107,7 @@ void Hub75Driver::begin() {
   cfg.double_buff    = true;
   _matrix = new MatrixPanel_I2S_DMA(cfg);
   bool ok = _matrix->begin();
-  Serial.printf("[HUB75/WF2] begin: %s  geometry=%dx%d chain=%d\n",
+  log_i("[HUB75/WF2] begin: %s  geometry=%dx%d chain=%d",
                 ok ? "OK" : "FAILED", WF2_PANEL_W, WF2_PANEL_H, WF2_CHAIN);
   if (!ok) { delete _matrix; _matrix = nullptr; return; }
   _matrix->setBrightness8(153);
@@ -236,7 +242,7 @@ void Hub75Driver::runDiagnosticSequence() {
 }
 
 void Hub75Driver::update() {
-  if (!_matrix) return;
+  if (!_matrix || _otaActive) return;
   bool needsRedraw = false;
   unsigned long now = millis();
 
@@ -303,7 +309,7 @@ String Hub75Driver::substituteTimer(const String& text) const {
 }
 
 void Hub75Driver::redraw() {
-  if (!_matrix) return;
+  if (!_matrix || _otaActive) return;
   _matrix->clearScreen();
 
   for (int zi = 0; zi < _zoneCount; zi++) {

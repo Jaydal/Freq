@@ -24,6 +24,9 @@ public:
 
   void setDisplayDriver(IDisplayDriver* driver) { _driver = driver; }
 
+  bool saveField(const String& key, const String& value);
+  bool saveField(const String& key, uint8_t value);
+
   String getPortalSSID();
 
   String getWifiSsid();

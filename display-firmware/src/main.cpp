@@ -27,7 +27,7 @@ static void checkResetButton() {
   if (pressed) {
     if (g_btnPressStart == 0) g_btnPressStart = millis();
     if (millis() - g_btnPressStart > 5000 && !g_btnHandled) {
-      Serial.println("[main] Button held 5s → factory reset");
+      log_i("[main] Button held 5s → factory reset");
       g_portal.factoryReset();
       g_btnHandled = true;
     }
@@ -61,6 +61,18 @@ static void statusLedNormal(MqttDisplayClient* mqtt) {
 
 #include <WiFi.h>
 
+#ifdef ENABLE_OTA
+#include <ArduinoOTA.h>
+#endif
+
+#ifdef ENABLE_TELNET
+#include "TelnetLogger.h"
+static TelnetLogger g_log;
+#define LOG(fmt, ...) g_log.printf(fmt, ##__VA_ARGS__)
+#else
+#define LOG(fmt, ...) Serial.printf(fmt, ##__VA_ARGS__)
+#endif
+
 void setup() {
   Serial.begin(115200);
   delay(2000); // Wait for the PC to reconnect the USB CDC serial port after a reboot
@@ -72,8 +84,8 @@ void setup() {
   WiFi.mode(WIFI_OFF);
   delay(100); // Give the background WiFi task a moment to cleanly exit
 
-  log_i("BOOTING UP! If you see this, the chip is NOT frozen!");
-  Serial.println("\n=== Freq Court Display — HD-WF2 ===");
+  LOG("BOOTING UP! If you see this, the chip is NOT frozen!\n");
+  LOG("\n=== Freq Court Display — HD-WF2 ===\n");
 
   pinMode(STATUS_LED, OUTPUT);
   pinMode(RESET_BUTTON, INPUT_PULLUP);
@@ -127,18 +139,73 @@ void setup() {
     g_display->setColorRGB((rgb >> 16) & 0xFF, (rgb >> 8) & 0xFF, rgb & 0xFF);
   }
 
-  log_i("[main] Loaded settings: SSID='%s', Broker='%s:%d', CourtID='%s', User='%s', Brightness=%d, Color=%s",
+  // ── Telnet console ─────────────────────────────────────────────────────────
+#ifdef ENABLE_TELNET
+  g_log.begin(23);
+  g_log.setCommandCallback([](const String& cmd, const String& args) {
+    if (cmd == "set.court" && args.length() > 0) {
+      g_portal.saveField("court_id", args);
+      LOG("[telnet] Court set to '%s' — rebooting...\n", args.c_str());
+      delay(500);
+      ESP.restart();
+    } else if (cmd == "set.brightness") {
+      uint8_t val = (uint8_t)constrain(args.toInt(), 0, 255);
+      g_portal.saveField("brightness", val);
+      if (g_display) g_display->setBrightness(val);
+      LOG("[telnet] Brightness set to %d\n", val);
+    } else if (cmd == "set.color" && args.startsWith("#")) {
+      g_portal.saveField("color_hex", args);
+      long rgb = strtol(args.substring(1).c_str(), NULL, 16);
+      if (g_display) g_display->setColorRGB((rgb >> 16) & 0xFF, (rgb >> 8) & 0xFF, rgb & 0xFF);
+      LOG("[telnet] Color set to %s\n", args.c_str());
+    } else if (cmd == "reboot") {
+      LOG("[telnet] Rebooting...\n");
+      delay(500);
+      ESP.restart();
+    } else if (cmd == "status") {
+      LOG("[telnet] Court: %s | Brightness: %d | Color: %s\n",
+        g_portal.getCourtId().c_str(), g_portal.getBrightness(), g_portal.getColorHex().c_str());
+    } else {
+      LOG("[telnet] Unknown command: %s\n", cmd.c_str());
+    }
+  });
+#endif
+
+  // ── OTA: wireless firmware updates ─────────────────────────────────────────
+#ifdef ENABLE_OTA
+  ArduinoOTA.setHostname(("freq-display-" + court).c_str());
+  #ifndef OTA_PASSWORD
+  #define OTA_PASSWORD "freqota"
+  #endif
+  ArduinoOTA.setPassword(OTA_PASSWORD);
+  ArduinoOTA.onStart([&]() {
+    if (g_display) g_display->setOtaActive(true);
+    LOG("[ota] Start — display paused\n");
+  });
+  ArduinoOTA.onEnd([]() {}); // device reboots after OTA; _otaActive resets on boot
+  ArduinoOTA.onProgress([](unsigned int p, unsigned int t) {
+    LOG("[ota] Progress: %u%%\n", t > 0 ? (p * 100) / t : 0);
+  });
+  ArduinoOTA.onError([](ota_error_t err) {
+    LOG("[ota] Error %d\n", err);
+  });
+  ArduinoOTA.begin();
+  LOG("[ota] Ready — upload via: pio run -e esp32-hub75-wf2-ota -t upload --upload-port %s\n",
+        WiFi.localIP().toString().c_str());
+#endif
+
+  LOG("[main] Loaded settings: SSID='%s', Broker='%s:%d', CourtID='%s', User='%s', Brightness=%d, Color=%s\n",
                 ssid.c_str(), broker.c_str(), port, court.c_str(), user.c_str(), brightness, colorHex.c_str());
 
   g_mqtt->begin(ssid.c_str(), pass.c_str(), broker.c_str(), port,
                 court.c_str(), user.c_str(), mpwd.c_str());
   digitalWrite(STATUS_LED, g_mqtt->isOnline() ? HIGH : LOW);
 
-  log_i("[main] === BOOT COMPLETE ===");
-  log_i("[main] WiFi:  %s (%d dBm)", WiFi.localIP().toString().c_str(), WiFi.RSSI());
-  log_i("[main] MQTT:  %s", g_mqtt->isOnline() ? "connected" : "disconnected");
-  log_i("[main] Court: %s", court.c_str());
-  log_i("[main] Subscribed to: courts/%s/display", court.c_str());
+  LOG("[main] === BOOT COMPLETE ===\n");
+  LOG("[main] WiFi:  %s (%d dBm)\n", WiFi.localIP().toString().c_str(), WiFi.RSSI());
+  LOG("[main] MQTT:  %s\n", g_mqtt->isOnline() ? "connected" : "disconnected");
+  LOG("[main] Court: %s\n", court.c_str());
+  LOG("[main] Subscribed to: courts/%s/display\n", court.c_str());
 }
 
 void loop() {
@@ -153,6 +220,12 @@ void loop() {
   }
 
   if (!g_mqtt) return;
+#ifdef ENABLE_TELNET
+  g_log.update();
+#endif
+#ifdef ENABLE_OTA
+  ArduinoOTA.handle();
+#endif
   g_mqtt->update();
   statusLedNormal(g_mqtt);
   yield();
