@@ -132,6 +132,8 @@ void MqttDisplayClient::update() {
     if (now - _lastPageChangeTime >= durationMs) {
       _lastPageChangeTime = now;
       _currentPageIndex = (_currentPageIndex + 1) % _playlist.size();
+      memset(_subpageIdx, 0, sizeof(_subpageIdx));
+      memset(_lastSubChange, 0, sizeof(_lastSubChange));
 
       applyCurrentPage();
     }
@@ -169,11 +171,14 @@ void MqttDisplayClient::update() {
     if (now - _overridePageChangeTime >= pageDuration) {
       _overridePageChangeTime = now;
       _overridePageIndex = (_overridePageIndex + 1) % _overridePages.size();
+      memset(_subpageIdx, 0, sizeof(_subpageIdx));
+      memset(_lastSubChange, 0, sizeof(_lastSubChange));
       applyCurrentPage();
     }
-    // Sub-page cycling for override lines
+    // Sub-page cycling for override lines (use current index after any rotation)
     {
-      const auto& opage = _overridePages[oIdx];
+      size_t curOIdx = _overridePageIndex % _overridePages.size();
+      const auto& opage = _overridePages[curOIdx];
       for (int zi = 0; zi < opage.zoneCount && zi < 3; zi++) {
         for (int li = 0; li < opage.zones[zi].lineCount && li < 2; li++) {
           const auto& line = opage.zones[zi].lines[li];
@@ -198,8 +203,6 @@ void MqttDisplayClient::update() {
 // ── Private ───────────────────────────────────────────────────────────────────
 
 void MqttDisplayClient::applyCurrentPage() {
-  memset(_subpageIdx, 0, sizeof(_subpageIdx));
-  memset(_lastSubChange, 0, sizeof(_lastSubChange));
   // Override takes priority over playlist
   if (_overrideActive && !_overridePages.empty()) {
     size_t idx = _overridePageIndex % _overridePages.size();
@@ -478,6 +481,8 @@ void MqttDisplayClient::handleCmdMessage(uint8_t* payload, unsigned int len) {
       _overrideActive = true;
       _overridePageIndex = 0;
       _overridePageChangeTime = millis();
+      memset(_subpageIdx, 0, sizeof(_subpageIdx));
+      memset(_lastSubChange, 0, sizeof(_lastSubChange));
       log_i("[mqtt-cmd] OVERRIDE: %d pages", _overridePages.size());
     }
     return;
@@ -489,6 +494,8 @@ void MqttDisplayClient::handleCmdMessage(uint8_t* payload, unsigned int len) {
     _overridePageIndex = 0;
     _currentPageIndex = 0;
     _lastPageChangeTime = millis();
+    memset(_subpageIdx, 0, sizeof(_subpageIdx));
+    memset(_lastSubChange, 0, sizeof(_lastSubChange));
     log_i("[mqtt-cmd] CLEAR_OVERRIDE");
     if (!_playlist.empty()) {
       applyCurrentPage();
@@ -687,6 +694,8 @@ void MqttDisplayClient::handleMessage(uint8_t* payload, unsigned int len) {
 
   _currentPageIndex = 0;
   _lastPageChangeTime = millis();
+  memset(_subpageIdx, 0, sizeof(_subpageIdx));
+  memset(_lastSubChange, 0, sizeof(_lastSubChange));
 
   applyCurrentPage();
   _driver.update();

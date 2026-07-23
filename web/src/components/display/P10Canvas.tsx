@@ -78,8 +78,14 @@ function renderZoneDots(
   const lineScales = zone.lines.map((line) => {
     if (zone.lines.length === 2) return 1;
     if (zone.scale) return zone.scale;
-    if (line.effect === 'SCROLL') return 2;
-    const tw2x = textWidthPx(subst(line.text ?? '', mockVars).toUpperCase(), 2);
+    const sp = (line as any).subpages?.[0];
+    if (sp && sp.effect === 'SCROLL') return 2;
+    if (!sp) {
+      if (line.effect === 'SCROLL') return 2;
+      const tw2x = textWidthPx(subst(line.text ?? '', mockVars).toUpperCase(), 2);
+      return tw2x <= zoneWidth ? 2 : 1;
+    }
+    const tw2x = textWidthPx(subst(sp.text, mockVars).toUpperCase(), 2);
     return tw2x <= zoneWidth ? 2 : 1;
   });
 
@@ -119,6 +125,8 @@ function renderZoneDots(
       if (!_spAccum[key]) _spAccum[key] = 0;
 
       let elapsed = _spAccum[key]!;
+      const totalCycle = subpages.reduce((sum: number, sp: any) => sum + (sp.durationMs || 5000), 0);
+      if (totalCycle > 0) elapsed %= totalCycle;
       let sp: any = subpages[0];
       for (let i = 0; i < subpages.length; i++) {
         if (elapsed < (subpages[i].durationMs || 5000)) {
