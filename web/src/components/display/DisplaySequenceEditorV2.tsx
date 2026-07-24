@@ -112,6 +112,7 @@ function parseSequence(raw: string): Record<SectionKey, SectionState> {
         if (p.zones) {
           return {
             durationSeconds: p.durationSeconds ?? s.interval ?? 10,
+            ...(p.hideIfEmpty && p.hideIfEmpty.length > 0 ? { hideIfEmpty: p.hideIfEmpty } : {}),
             zones: p.zones.map((z: any) => ({
               panelStart: z.panelStart ?? 0,
               panelEnd: z.panelEnd ?? 2,
@@ -174,6 +175,7 @@ function serializeSequence(
       interval: sections[key].interval,
       pages: sections[key].pages.map(p => ({
         durationSeconds: p.durationSeconds,
+        ...(p.hideIfEmpty && p.hideIfEmpty.length > 0 ? { hideIfEmpty: p.hideIfEmpty } : {}),
         zones: p.zones.map(z => ({
           panelStart: z.panelStart,
           panelEnd: z.panelEnd,
@@ -419,6 +421,18 @@ export function DisplaySequenceEditorV2({ sequence: initial }: Props) {
         currentPage={pageIdx}
         previewIndex={isPreviewing ? previewPageIndex : undefined}
         durationSeconds={page?.durationSeconds ?? 10}
+        hideIfEmpty={page?.hideIfEmpty}
+        onHideIfEmptyChange={vars => {
+          setSections(prev => ({
+            ...prev,
+            [activeSection]: {
+              ...prev[activeSection],
+              pages: prev[activeSection].pages.map((p, i) =>
+                i === pageIdx ? { ...p, hideIfEmpty: vars.length > 0 ? vars : undefined } : p
+              ),
+            },
+          }));
+        }}
         onPageSelect={i => {
           setCurrentPage(i);
           setSelectedZone(0);

@@ -31,6 +31,7 @@ export interface DisplayZone {
 export interface ZonePage {
   durationSeconds: number;
   zones: DisplayZone[];
+  hideIfEmpty?: string[];
 }
 
 export interface DisplaySequenceConfig {

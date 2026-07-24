@@ -21,6 +21,7 @@ export interface DisplaySequenceSection {
     color?: string;
     effect?: string;
     durationSeconds?: number;
+    hideIfEmpty?: string[];
     zones?: {
       panelStart: number;
       panelEnd: number;
@@ -131,6 +132,13 @@ export function generatePayload(
 
   if (section) {
     for (const tpl of section.pages) {
+      if (tpl.hideIfEmpty && tpl.hideIfEmpty.length > 0) {
+        const allEmpty = tpl.hideIfEmpty.every(k => {
+          const v = subVars[k];
+          return v === undefined || v === '';
+        });
+        if (allEmpty) continue;
+      }
       if (tpl.zones) {
         const pageDuration = tpl.durationSeconds ?? section.interval;
         const mappedZones = tpl.zones.map(zone => ({

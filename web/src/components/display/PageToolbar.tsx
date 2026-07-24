@@ -7,27 +7,31 @@ interface Props {
   pageCount: number;
   currentPage: number;
   durationSeconds: number;
+  hideIfEmpty?: string[];
   previewIndex?: number;
   onPageSelect: (index: number) => void;
   onAddPage: () => void;
   onRemovePage: () => void;
   onDuplicatePage: () => void;
   onDurationChange: (seconds: number) => void;
+  onHideIfEmptyChange?: (vars: string[]) => void;
 }
 
 export function PageToolbar({
   pageCount,
   currentPage,
   durationSeconds,
+  hideIfEmpty,
   previewIndex,
   onPageSelect,
   onAddPage,
   onRemovePage,
   onDuplicatePage,
   onDurationChange,
+  onHideIfEmptyChange,
 }: Props) {
   return (
-    <div className="flex items-center gap-3 py-2">
+    <div className="flex items-center gap-3 py-2 flex-wrap">
       <span className="text-xs text-zinc-500">Pages:</span>
       <div className="flex gap-1">
         {Array.from({ length: pageCount }).map((_, i) => (
@@ -80,6 +84,18 @@ export function PageToolbar({
         />
         <span className="text-xs text-zinc-600">s</span>
       </div>
+      {onHideIfEmptyChange && (
+        <div className="flex items-center gap-1">
+          <span className="text-xs text-zinc-500">Hide if empty:</span>
+          <Input
+            type="text"
+            value={(hideIfEmpty ?? []).join(', ')}
+            onChange={e => onHideIfEmptyChange(e.target.value.split(',').map(s => s.trim()).filter(Boolean))}
+            placeholder="next_name, match_title"
+            className="w-40 h-6 text-xs bg-zinc-950 border-zinc-700 text-zinc-200"
+          />
+        </div>
+      )}
     </div>
   );
 }
