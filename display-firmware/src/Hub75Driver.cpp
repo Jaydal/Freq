@@ -121,6 +121,7 @@ void Hub75Driver::begin() {
   _ballDy = 1;
   _splashStartTime = millis();
   _ballLastMove = _splashStartTime;
+  _ballBounces = 0;
   _splashActive = true;
   redraw();
 }
@@ -271,7 +272,7 @@ void Hub75Driver::update() {
 
   if (_splashActive) {
     unsigned long now = millis();
-    if (now - _splashStartTime >= SPLASH_DURATION_MS) {
+    if (_ballBounces >= SPLASH_BOUNCES) {
       _splashActive = false;
       redraw();
       return;
@@ -283,6 +284,7 @@ void Hub75Driver::update() {
       if (_ballX <= 0 || _ballX >= WF2_RES_X - BALL_SIZE) {
         _ballDx = -_ballDx;
         _ballX += _ballDx;
+        _ballBounces++;
       }
       if (_ballY <= 0 || _ballY >= WF2_RES_Y - BALL_SIZE) {
         _ballDy = -_ballDy;
