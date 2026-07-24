@@ -122,6 +122,7 @@ void Hub75Driver::begin() {
   _splashStartTime = millis();
   _ballLastMove = _splashStartTime;
   _splashActive = true;
+  _splashStaticDrawn = false;
   _matrix->clearScreen();
   _matrix->flipDMABuffer();
 }
@@ -269,6 +270,10 @@ void Hub75Driver::update() {
 
   if (_splashActive) {
     unsigned long now = millis();
+    if (now - _splashStartTime >= SPLASH_DURATION_MS) {
+      if (!_splashStaticDrawn) { redraw(); _splashStaticDrawn = true; }
+      return;
+    }
     if (now - _ballLastMove >= 60) {
       _ballLastMove = now;
       _ballX += _ballDx;
