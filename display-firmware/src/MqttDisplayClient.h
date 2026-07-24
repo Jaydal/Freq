@@ -71,10 +71,10 @@ private:
   String   _mqttPass;
   char          _displayTopic[80];
   char          _statusTopic[80];
-  unsigned long _lastWifiReconnect;
-  unsigned long _lastMqttReconnect;
-  unsigned long _lastHeartbeat;
-  bool          _wasOnline;
+  unsigned long _lastWifiReconnect = 0;
+  unsigned long _lastMqttReconnect = 0;
+  unsigned long _lastHeartbeat = 0;
+  bool          _wasOnline = false;
   CourtChangeCallback _courtChangeCb = nullptr;
   String   _mac;
   char          _cmdTopic[50];

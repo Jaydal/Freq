@@ -333,11 +333,8 @@ export function DisplaySequenceEditorV2({ sequence: initial }: Props) {
         body: JSON.stringify({ key: 'displaySequence', value: json }),
       });
       if (!res.ok) throw new Error('Save failed');
-      try {
-        await fetch('/api/display/publish-all', { method: 'POST' });
-      } catch {
-        // non-critical — don't show error
-      }
+      const pubRes = await fetch('/api/display/publish-all', { method: 'POST' });
+      if (!pubRes.ok) setError('Sequence saved but publish failed');
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Unknown error');
     }
