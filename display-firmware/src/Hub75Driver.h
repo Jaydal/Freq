@@ -12,6 +12,7 @@ public:
   void showRow(uint8_t row, const char* text) override;
   void update() override;
   void setBrightness(uint8_t b) override;
+  void setRotation(uint8_t r) override;
   void setColorRGB(uint8_t r, uint8_t g, uint8_t b) override;
   void setScrollSpeed(uint16_t msPerPixel) override;
   void setAnimationMode(const char* mode) override;
@@ -73,6 +74,9 @@ private:
 
   // OTA safety — suppress DMA during firmware updates
   volatile bool _otaActive = false;
+
+  // Rotation
+  uint8_t _rotation = 0;
 
   // Timer countdown
   unsigned long _timerRemainingAtBaseMs = 0;

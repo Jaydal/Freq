@@ -537,6 +537,9 @@ void MqttDisplayClient::handleMessage(uint8_t* payload, unsigned int len) {
   if (doc["brightness"].is<uint8_t>()) {
     _driver.setBrightness(doc["brightness"].as<uint8_t>());
   }
+  if (doc["rotation"].is<uint8_t>()) {
+    _driver.setRotation(doc["rotation"].as<uint8_t>());
+  }
   if (doc["scroll_speed"].is<uint16_t>()) {
     _driver.setScrollSpeed(doc["scroll_speed"].as<uint16_t>());
   }

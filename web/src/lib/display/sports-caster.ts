@@ -81,6 +81,7 @@ export function generatePayload(
     nextWait?: string;
     nextBookedTime?: string;
     brightness?: number;
+    rotation?: number;
   }
 ): DisplayPayload {
   const nowMs = Date.now();
@@ -211,6 +212,7 @@ export function generatePayload(
     schedule: mappedSchedule,
     serverTime,
     ...(opts?.brightness != null ? { brightness: opts.brightness } : {}),
+    ...(opts?.rotation != null ? { rotation: opts.rotation } : {}),
     display: {
       pages
     }

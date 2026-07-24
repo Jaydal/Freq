@@ -170,6 +170,11 @@ void Hub75Driver::setBrightness(uint8_t b) {
   if (_matrix) _matrix->setBrightness8(b);
 }
 
+void Hub75Driver::setRotation(uint8_t r) {
+  _rotation = r;
+  if (_matrix) _matrix->setRotation(r);
+}
+
 void Hub75Driver::setColorRGB(uint8_t r, uint8_t g, uint8_t b) {
   if (_matrix) {
     _defaultColor = _matrix->color565(r, g, b);

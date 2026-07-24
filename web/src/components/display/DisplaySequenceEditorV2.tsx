@@ -165,9 +165,10 @@ function parseSequence(raw: string): Record<SectionKey, SectionState> {
 
 function serializeSequence(
   sections: Record<SectionKey, SectionState>,
-  brightness: number
+  brightness: number,
+  rotation: number
 ): string {
-  const obj: Record<string, unknown> = { brightness };
+  const obj: Record<string, unknown> = { brightness, rotation };
   for (const key of SECTIONS) {
     obj[key] = {
       interval: sections[key].interval,
@@ -197,6 +198,9 @@ export function DisplaySequenceEditorV2({ sequence: initial }: Props) {
   >(() => parseSequence(initial));
   const [brightness, setBrightness] = useState<number>(() => {
     try { const p = JSON.parse(initial); return p.brightness ?? 153; } catch { return 153; }
+  });
+  const [rotation, setRotation] = useState<number>(() => {
+    try { const p = JSON.parse(initial); return p.rotation ?? 0; } catch { return 0; }
   });
   const [activeSection, setActiveSection] = useState<SectionKey>('idle');
   const [currentPage, setCurrentPage] = useState(0);
@@ -319,7 +323,7 @@ export function DisplaySequenceEditorV2({ sequence: initial }: Props) {
     setError(null);
     setSaving(true);
     try {
-      const json = serializeSequence(sections, brightness);
+      const json = serializeSequence(sections, brightness, rotation);
       JSON.parse(json);
       const res = await fetch('/api/settings', {
         method: 'PUT',
@@ -392,6 +396,18 @@ export function DisplaySequenceEditorV2({ sequence: initial }: Props) {
           className="w-24 h-6 accent-emerald-500"
         />
         <span className="text-xs text-zinc-400 w-8">{brightness}</span>
+        <span className="w-px h-5 bg-zinc-700" />
+        <label className="text-xs text-zinc-500 whitespace-nowrap">Rotate 180°</label>
+        <button
+          onClick={() => setRotation(rotation === 2 ? 0 : 2)}
+          className={`px-2 py-1 text-xs font-medium rounded transition-colors ${
+            rotation === 2
+              ? 'bg-emerald-600 text-white'
+              : 'bg-zinc-800 text-zinc-400 hover:text-zinc-300'
+          }`}
+        >
+          {rotation === 2 ? 'ON' : 'OFF'}
+        </button>
       </div>
 
       {isPreviewing && (

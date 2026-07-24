@@ -43,6 +43,7 @@ export interface DisplayPayload {
   };
   serverTime: number;
   brightness?: number;
+  rotation?: number;
   display: {
     pages: DisplayPage[];
   };

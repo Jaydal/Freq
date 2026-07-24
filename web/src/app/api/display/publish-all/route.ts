@@ -27,12 +27,14 @@ async function handlePublishAll() {
   const prepTimeSec = parseInt(settings.get('preparationTime') ?? '', 10) || 300;
   let displaySequence: DisplaySequenceConfig | undefined;
   let brightness = 153;
+  let rotation = 0;
   try {
     const v = settings.get('displaySequence');
     if (v) {
       const parsed = JSON.parse(v);
       displaySequence = parsed;
       brightness = parsed.brightness ?? 153;
+      rotation = parsed.rotation ?? 0;
     }
   } catch {}
 
@@ -91,6 +93,7 @@ async function handlePublishAll() {
       displaySequence,
       prepTimeSec,
       brightness,
+      rotation,
       nextName: firstWaiting?.members?.first_name ?? '',
       nextMatch: firstWaiting?.match_title ?? '',
       nextWait: firstWaiting?.created_at ? (() => {
