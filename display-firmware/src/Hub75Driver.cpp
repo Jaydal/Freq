@@ -122,7 +122,6 @@ void Hub75Driver::begin() {
   _splashStartTime = millis();
   _ballLastMove = _splashStartTime;
   _splashActive = true;
-  _splashStaticDrawn = false;
   _matrix->clearScreen();
   _matrix->flipDMABuffer();
 }
@@ -270,10 +269,6 @@ void Hub75Driver::update() {
 
   if (_splashActive) {
     unsigned long now = millis();
-    if (now - _splashStartTime >= SPLASH_DURATION_MS) {
-      if (!_splashStaticDrawn) { redraw(); _splashStaticDrawn = true; }
-      return;
-    }
     if (now - _ballLastMove >= 60) {
       _ballLastMove = now;
       _ballX += _ballDx;
@@ -362,16 +357,9 @@ void Hub75Driver::redraw() {
   if (_splashActive) {
     _matrix->clearScreen();
     uint16_t green = _matrix->color565(0, 255, 0);
-    if (millis() - _splashStartTime < SPLASH_DURATION_MS) {
-      for (int dy = 0; dy < BALL_SIZE; dy++)
-        for (int dx = 0; dx < BALL_SIZE; dx++)
-          drawPixelMapped(_ballX + dx, _ballY + dy, green);
-    } else {
-      int tw = textWidth5x7Scaled("FREQ", 2);
-      int x = (WF2_RES_X - tw) / 2;
-      int y = (WF2_RES_Y - CHAR_H * 2) / 2;
-      drawText5x7Scaled("FREQ", x, y, green, 2, 0, WF2_RES_X);
-    }
+    for (int dy = 0; dy < BALL_SIZE; dy++)
+      for (int dx = 0; dx < BALL_SIZE; dx++)
+        drawPixelMapped(_ballX + dx, _ballY + dy, green);
     _matrix->flipDMABuffer();
     return;
   }
