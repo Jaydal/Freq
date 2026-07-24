@@ -68,7 +68,6 @@ private:
   int _ballDx = 1, _ballDy = 1;
   unsigned long _ballLastMove = 0;
   unsigned long _splashStartTime = 0;
-  bool _splashStaticDrawn = false;
   static constexpr unsigned long SPLASH_DURATION_MS = 5000;
   static constexpr int BALL_SIZE = 3;
 

@@ -122,7 +122,6 @@ void Hub75Driver::begin() {
   _splashStartTime = millis();
   _ballLastMove = _splashStartTime;
   _splashActive = true;
-  _splashStaticDrawn = false;
   redraw();
 }
 
@@ -136,7 +135,6 @@ void Hub75Driver::clear() {
 }
 
 void Hub75Driver::showRow(uint8_t row, const char* text) {
-  _splashActive = false;
   if (row != 0 || !_matrix) return;
 
   // Build a temporary single zone from the text
@@ -187,7 +185,6 @@ void Hub75Driver::setAnimationMode(const char* mode) {
 }
 
 void Hub75Driver::setZones(const ZoneRenderInfo* zones, uint8_t count) {
-  _splashActive = false;
   if (count > MAX_ZONES) count = MAX_ZONES;
   _zoneCount = count;
 
@@ -270,7 +267,8 @@ void Hub75Driver::update() {
   if (_splashActive) {
     unsigned long now = millis();
     if (now - _splashStartTime >= SPLASH_DURATION_MS) {
-      if (!_splashStaticDrawn) { redraw(); _splashStaticDrawn = true; }
+      _splashActive = false;
+      redraw();
       return;
     }
     if (now - _ballLastMove >= 60) {
