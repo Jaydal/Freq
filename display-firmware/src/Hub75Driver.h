@@ -66,11 +66,11 @@ private:
   // Boot splash
   bool _splashActive = false;
   int _ballX = 0, _ballY = 0;
-  int _ballDx = 1, _ballDy = 1;
-  int _ballBounces = 0;
+  float _ballAngle = 0;
+  int _ballOrbits = 0;
   unsigned long _ballLastMove = 0;
   unsigned long _splashStartTime = 0;
-  static constexpr int SPLASH_BOUNCES = 4;
+  static constexpr int SPLASH_ORBITS = 2;
   static constexpr int BALL_SIZE = 3;
 
   // OTA safety — suppress DMA during firmware updates

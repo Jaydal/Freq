@@ -115,13 +115,12 @@ void Hub75Driver::begin() {
   _matrix->fillScreen(green);
   _matrix->flipDMABuffer();
   delay(500);
+  _ballAngle = 0;
+  _ballOrbits = 0;
   _ballX = WF2_RES_X / 2 - 1;
   _ballY = WF2_RES_Y / 2 - 1;
-  _ballDx = 1;
-  _ballDy = 1;
   _splashStartTime = millis();
   _ballLastMove = _splashStartTime;
-  _ballBounces = 0;
   _splashActive = true;
   redraw();
 }
@@ -272,24 +271,24 @@ void Hub75Driver::update() {
 
   if (_splashActive) {
     unsigned long now = millis();
-    if (_ballBounces >= SPLASH_BOUNCES) {
+    if (_ballOrbits >= SPLASH_ORBITS) {
       _splashActive = false;
       redraw();
       return;
     }
     if (now - _ballLastMove >= 60) {
       _ballLastMove = now;
-      _ballX += _ballDx;
-      _ballY += _ballDy;
-      if (_ballX <= 0 || _ballX >= WF2_RES_X - BALL_SIZE) {
-        _ballDx = -_ballDx;
-        _ballX += _ballDx;
-        _ballBounces++;
+      _ballAngle += 0.1f;
+      if (_ballAngle >= TWO_PI) {
+        _ballAngle -= TWO_PI;
+        _ballOrbits++;
       }
-      if (_ballY <= 0 || _ballY >= WF2_RES_Y - BALL_SIZE) {
-        _ballDy = -_ballDy;
-        _ballY += _ballDy;
-      }
+      int cx = WF2_RES_X / 2 - 1;
+      int cy = WF2_RES_Y / 2 - 1;
+      int rx = 44;
+      int ry = 4;
+      _ballX = cx + (int)(rx * cosf(_ballAngle));
+      _ballY = cy + (int)(ry * sinf(_ballAngle));
       redraw();
     }
     return;
