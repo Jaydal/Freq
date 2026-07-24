@@ -69,11 +69,9 @@ function textWidth(text: string): number {
   let w = 0;
   let first = true;
   for (const ch of text) {
-    if (ch !== ' ') {
-      if (!first) w += SPACING;
-      w += CHAR_W;
-      first = false;
-    }
+    if (!first) w += SPACING;
+    w += CHAR_W;
+    first = false;
   }
   return w;
 }
@@ -82,7 +80,12 @@ export function textToDots(text: string, offsetX = 0, offsetY = 0): { x: number;
   const dots: { x: number; y: number }[] = [];
   let cursor = offsetX;
   for (const ch of text) {
-    if (ch === ' ') { continue; }
+    if (ch === ' ') {
+      dots.push({ x: cursor + 1, y: offsetY + 3 });
+      dots.push({ x: cursor + 3, y: offsetY + 3 });
+      cursor += CELL_W;
+      continue;
+    }
     const rows = getChar(ch);
     if (!rows) { cursor += SPACING; continue; }
     for (let row = 0; row < CHAR_H; row++) {

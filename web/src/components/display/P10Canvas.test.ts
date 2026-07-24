@@ -18,8 +18,8 @@ describe('textWidthPx', () => {
     expect(textWidthPx('HELLO', 2)).toBe(58); // (5*5 + 4*1) * 2
   });
 
-  it('handles spaces (space contributes no width)', () => {
-    expect(textWidthPx('A B', 1)).toBe(11); // 5 + 1(sp) + 5
+  it('handles spaces (space renders as 2 dots, full char width)', () => {
+    expect(textWidthPx('A B', 1)).toBe(17); // 5 + 1 + 5 + 1 + 5
   });
 });
 

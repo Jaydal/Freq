@@ -43,10 +43,8 @@ function getAvailableVRange(borderRows?: { start: number; end: number }[]): { to
 export function textWidthPx(text: string, scale: number): number {
   let w = 0;
   for (const ch of text) {
-    if (ch !== ' ') {
-      if (w > 0) w += SPACING * scale;
-      w += CHAR_W * scale;
-    }
+    if (w > 0) w += SPACING * scale;
+    w += CHAR_W * scale;
   }
   return w;
 }
