@@ -123,8 +123,7 @@ void Hub75Driver::begin() {
   _ballLastMove = _splashStartTime;
   _splashActive = true;
   _splashStaticDrawn = false;
-  _matrix->clearScreen();
-  _matrix->flipDMABuffer();
+  redraw();
 }
 
 void Hub75Driver::clear() {
