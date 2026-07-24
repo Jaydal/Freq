@@ -44,7 +44,7 @@ export function textWidthPx(text: string, scale: number): number {
   let w = 0;
   for (const ch of text) {
     if (w > 0) w += SPACING * scale;
-    w += CHAR_W * scale;
+    w += ch === ' ' ? 2 * scale : CHAR_W * scale;
   }
   return w;
 }
