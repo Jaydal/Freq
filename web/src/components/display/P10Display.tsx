@@ -70,7 +70,7 @@ function textWidth(text: string): number {
   let first = true;
   for (const ch of text) {
     if (!first) w += SPACING;
-    w += ch === ' ' ? 2 : CHAR_W;
+    w += ch === ' ' ? SPACING : CHAR_W;
     first = false;
   }
   return w;
@@ -81,7 +81,7 @@ export function textToDots(text: string, offsetX = 0, offsetY = 0): { x: number;
   let cursor = offsetX;
   for (const ch of text) {
     if (ch === ' ') {
-      cursor += 2;
+      cursor += SPACING;
       continue;
     }
     const rows = getChar(ch);

@@ -500,7 +500,7 @@ int Hub75Driver::textWidth5x7Scaled(const char* s, int scale) {
   bool first = true;
   for (const char* p = s; *p; p++) {
     if (!first) w += SPACING * scale;
-    w += (*p == ' ') ? 2 * scale : CHAR_W * scale;
+    w += (*p == ' ') ? SPACING * scale : CHAR_W * scale;
     first = false;
   }
   return w;
@@ -539,7 +539,7 @@ void Hub75Driver::drawText5x7Scaled(const char* s, int x, int y, uint16_t color,
         }
       }
     }
-    cursor += (*p == ' ') ? 2 * scale : CELL_W * scale;
+    cursor += (*p == ' ') ? SPACING * scale : CELL_W * scale;
   }
 }
 
