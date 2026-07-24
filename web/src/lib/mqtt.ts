@@ -42,6 +42,7 @@ export interface DisplayPayload {
     upcoming: { name: string }[];
   };
   serverTime: number;
+  brightness?: number;
   display: {
     pages: DisplayPage[];
   };

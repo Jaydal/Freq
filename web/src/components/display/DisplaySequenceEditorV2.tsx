@@ -164,9 +164,10 @@ function parseSequence(raw: string): Record<SectionKey, SectionState> {
 }
 
 function serializeSequence(
-  sections: Record<SectionKey, SectionState>
+  sections: Record<SectionKey, SectionState>,
+  brightness: number
 ): string {
-  const obj: Record<string, unknown> = {};
+  const obj: Record<string, unknown> = { brightness };
   for (const key of SECTIONS) {
     obj[key] = {
       interval: sections[key].interval,
@@ -194,6 +195,9 @@ export function DisplaySequenceEditorV2({ sequence: initial }: Props) {
   const [sections, setSections] = useState<
     Record<SectionKey, SectionState>
   >(() => parseSequence(initial));
+  const [brightness, setBrightness] = useState<number>(() => {
+    try { const p = JSON.parse(initial); return p.brightness ?? 153; } catch { return 153; }
+  });
   const [activeSection, setActiveSection] = useState<SectionKey>('idle');
   const [currentPage, setCurrentPage] = useState(0);
   const [selectedZone, setSelectedZone] = useState<number | null>(0);
@@ -315,7 +319,7 @@ export function DisplaySequenceEditorV2({ sequence: initial }: Props) {
     setError(null);
     setSaving(true);
     try {
-      const json = serializeSequence(sections);
+      const json = serializeSequence(sections, brightness);
       JSON.parse(json);
       const res = await fetch('/api/settings', {
         method: 'PUT',
@@ -376,6 +380,19 @@ export function DisplaySequenceEditorV2({ sequence: initial }: Props) {
       </div>
 
       {error && <p className="text-xs text-red-400">{error}</p>}
+
+      <div className="flex items-center gap-3 px-4 py-2 bg-zinc-900/50 rounded border border-zinc-700/50">
+        <label className="text-xs text-zinc-500 whitespace-nowrap">Brightness</label>
+        <input
+          type="range"
+          min={1}
+          max={255}
+          value={brightness}
+          onChange={e => setBrightness(Number(e.target.value))}
+          className="w-24 h-6 accent-emerald-500"
+        />
+        <span className="text-xs text-zinc-400 w-8">{brightness}</span>
+      </div>
 
       {isPreviewing && (
         <MockValuesPanel values={mockValues} onChange={setMockValues} />

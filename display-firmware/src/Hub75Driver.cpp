@@ -500,7 +500,7 @@ int Hub75Driver::textWidth5x7Scaled(const char* s, int scale) {
   bool first = true;
   for (const char* p = s; *p; p++) {
     if (!first) w += SPACING * scale;
-    w += (*p == ' ') ? 0 : CHAR_W * scale;
+    w += CHAR_W * scale;
     first = false;
   }
   return w;
@@ -539,7 +539,26 @@ void Hub75Driver::drawText5x7Scaled(const char* s, int x, int y, uint16_t color,
         }
       }
     }
-    cursor += (*p == ' ') ? 0 : CELL_W * scale;
+    if (*p == ' ') {
+      int dotRow = (CHAR_H / 2) * scale;
+      for (int dy = 0; dy < scale; dy++) {
+        for (int dx = 0; dx < scale; dx++) {
+          int py = y + dotRow + dy;
+          for (int col = 1; col <= 3; col += 2) {
+            int px = cursor + col * scale + dx;
+            bool isBorder = false;
+            for (uint8_t i = 0; i < borderCount; i++) {
+              if (py >= borderRanges[i].start && py <= borderRanges[i].end) { isBorder = true; break; }
+            }
+            if (isBorder) continue;
+            if (px >= clipXStart && px < clipXEnd && py >= 0 && py < WF2_RES_Y) {
+              drawPixelMapped(px, py, color);
+            }
+          }
+        }
+      }
+    }
+    cursor += CELL_W * scale;
   }
 }
 

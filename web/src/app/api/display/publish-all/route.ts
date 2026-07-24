@@ -26,7 +26,15 @@ async function handlePublishAll() {
   const settings = new Map<string, string>((settingsRows ?? []).map((r: any) => [r.key, r.value]));
   const prepTimeSec = parseInt(settings.get('preparationTime') ?? '', 10) || 300;
   let displaySequence: DisplaySequenceConfig | undefined;
-  try { const v = settings.get('displaySequence'); if (v) displaySequence = JSON.parse(v); } catch {}
+  let brightness = 153;
+  try {
+    const v = settings.get('displaySequence');
+    if (v) {
+      const parsed = JSON.parse(v);
+      displaySequence = parsed;
+      brightness = parsed.brightness ?? 153;
+    }
+  } catch {}
 
   const gameByCourt = new Map<string, any>();
   (games ?? []).forEach((g: any) => gameByCourt.set(g.court_id, g));
@@ -82,6 +90,7 @@ async function handlePublishAll() {
       queueCount: courtQueueCount,
       displaySequence,
       prepTimeSec,
+      brightness,
       nextName: firstWaiting?.members?.first_name ?? '',
       nextMatch: firstWaiting?.match_title ?? '',
       nextWait: firstWaiting?.created_at ? (() => {
