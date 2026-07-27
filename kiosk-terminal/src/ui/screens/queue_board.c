@@ -5,7 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "../../net/pn532_i2c.h"
+#include "../../net/nfc_reader.h"
 #include "../ui_app.h"
 
 static void theme_switch_cb(lv_event_t *e) {
@@ -38,7 +38,7 @@ lv_obj_t *queue_board_create(lv_obj_t *parent, const kiosk_board_t *board,
   lv_obj_add_event_cb(theme_sw, theme_switch_cb, LV_EVENT_VALUE_CHANGED, NULL);
 
   lv_obj_t *nfc_status = lv_label_create(top_right);
-  if (pn532_is_online()) {
+  if (nfc_reader_is_online()) {
       lv_label_set_text(nfc_status, "NFC: OK");
       lv_obj_set_style_text_color(nfc_status, kiosk_theme_color_success(), 0);
   } else {

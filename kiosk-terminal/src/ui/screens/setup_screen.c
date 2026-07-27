@@ -6,7 +6,7 @@
 #include <string.h>
 #include <stddef.h>
 #include "../../net/wifi_scanner.h"
-#include "../../net/pn532_i2c.h"
+#include "../../net/nfc_reader.h"
 
 #define SETUP_FIELD_COUNT 7
 
@@ -257,7 +257,7 @@ lv_obj_t *setup_screen_create(lv_obj_t *parent, setup_done_cb_t on_done, void *u
   lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 15);
 
   lv_obj_t *nfc_status = lv_label_create(root);
-  bool nfc_ok = pn532_is_online();
+  bool nfc_ok = nfc_reader_is_online();
   lv_label_set_text_fmt(nfc_status, "NFC: %s", nfc_ok ? "OK" : "Offline");
   lv_obj_set_style_text_color(nfc_status, nfc_ok ? KIOSK_COLOR_EMERALD_400 : KIOSK_COLOR_RED_400, 0);
   lv_obj_align(nfc_status, LV_ALIGN_TOP_RIGHT, -15, 15);

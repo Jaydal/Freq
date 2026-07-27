@@ -235,7 +235,7 @@ static void reset_to_idle(void) {
   memset(&s_app.member, 0, sizeof(s_app.member));
   memset(&s_app.selected_court, 0, sizeof(s_app.selected_court));
   memset(s_app.match_title, 0, sizeof(s_app.match_title));
-  s_app.step = KIOSK_STEP_IDLE;
+      s_app.step = KIOSK_STEP_IDLE;
   render_current();
 }
 
@@ -540,7 +540,7 @@ static void on_tick(lv_timer_t *timer) {
 
   if (s_app.step == KIOSK_STEP_BOOTING) {
     if (s_app.provider->is_ready()) {
-      s_app.step = KIOSK_STEP_IDLE;
+  s_app.step = KIOSK_STEP_IDLE;
       render_current();
     } else if (lv_tick_get() > 15000) {
       s_app.step = KIOSK_STEP_SETUP;

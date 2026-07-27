@@ -27,7 +27,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
-#include "../net/pn532_i2c.h"
+#include "../net/nfc_reader.h"
 
 /* LVGL */
 #include "lvgl.h"
@@ -197,9 +197,6 @@ void app_main(void)
     esp32_display_init();
     ESP_LOGI(TAG, "Display initialised");
 
-    /* 3.5. NFC Reader Task */
-    pn532_start_task();
-
     /* 4. WiFi subsystem (STA, no connection) */
     prv_wifi_init_sta();
 
@@ -207,11 +204,14 @@ void app_main(void)
     ui_app_init();
     ESP_LOGI(TAG, "UI initialised");
 
-    /* 6. MQTT polling timer */
+    /* 6. NFC Reader Task — started after UI so LVGL renders first frame */
+    nfc_reader_start();
+
+    /* 7. MQTT polling timer */
     lv_timer_create(prv_mqtt_poll_cb, MQTT_POLL_INTERVAL_MS, NULL);
     ESP_LOGI(TAG, "MQTT poll timer created (%d ms)", MQTT_POLL_INTERVAL_MS);
 
-    /* 7. LVGL clock driven by a hardware timer (decoupled from the LVGL task,
+    /* 8. LVGL clock driven by a hardware timer (decoupled from the LVGL task,
      * which blocks on VSYNC during flushes). */
     const esp_timer_create_args_t lvgl_tick_args = {
         .callback = &prv_lvgl_tick_cb,
@@ -222,7 +222,7 @@ void app_main(void)
     ESP_ERROR_CHECK(esp_timer_start_periodic(lvgl_tick_timer,
                                              LVGL_HANDLER_PERIOD_MS * 1000));
 
-    /* 8. Dedicated LVGL task on core 1. It registers its own handle with the
+    /* 9. Dedicated LVGL task on core 1. It registers its own handle with the
      * display layer at startup (see prv_lvgl_task). */
     xTaskCreatePinnedToCore(
         prv_lvgl_task,
