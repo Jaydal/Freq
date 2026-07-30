@@ -71,6 +71,7 @@ lv_obj_t *step_select_duration_create(lv_obj_t *parent,
 
     lv_obj_t *tile = lv_btn_create(grid);
     lv_obj_add_style(tile, &kiosk_style_tile, 0);
+    lv_obj_add_style(tile, &kiosk_style_tile, LV_STATE_PRESSED);
     lv_obj_set_width(tile, lv_pct(48));
     lv_obj_set_height(tile, 140);
     lv_obj_set_style_pad_all(tile, 12, 0);
@@ -154,6 +155,7 @@ lv_obj_t *step_select_duration_create(lv_obj_t *parent,
 
   lv_obj_t *back_btn = lv_btn_create(scroll);
   lv_obj_add_style(back_btn, &kiosk_style_btn_secondary, 0);
+  lv_obj_add_style(back_btn, &kiosk_style_btn_secondary, LV_STATE_PRESSED);
   lv_obj_set_width(back_btn, lv_pct(100));
   lv_obj_t *back_label = lv_label_create(back_btn);
   lv_label_set_text(back_label, LV_SYMBOL_LEFT " Back to Game Format");

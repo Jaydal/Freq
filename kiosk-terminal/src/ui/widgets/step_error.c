@@ -43,6 +43,7 @@ lv_obj_t *step_error_create(lv_obj_t *parent, const kiosk_error_t *error, step_e
 
   lv_obj_t *retry_btn = lv_btn_create(root);
   lv_obj_add_style(retry_btn, &kiosk_style_btn_secondary, 0);
+  lv_obj_add_style(retry_btn, &kiosk_style_btn_secondary, LV_STATE_PRESSED);
   lv_obj_set_width(retry_btn, lv_pct(80));
   lv_obj_t *retry_label = lv_label_create(retry_btn);
   lv_label_set_text(retry_label, "Try Again");

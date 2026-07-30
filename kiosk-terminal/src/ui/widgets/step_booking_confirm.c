@@ -32,18 +32,9 @@ static void confirm_click_cb(lv_event_t *e) {
   if (!ctx) return;
   /* Show processing state */
   lv_obj_add_state(ctx->confirm_btn, LV_STATE_DISABLED);
-  lv_obj_add_flag(ctx->confirm_label, LV_OBJ_FLAG_HIDDEN);
-  
-  lv_obj_t *spinner = lv_spinner_create(ctx->confirm_btn, 1000, 60);
-  lv_obj_set_size(spinner, 24, 24);
-  lv_obj_set_style_arc_color(spinner, lv_color_white(), LV_PART_MAIN);
-  lv_obj_set_style_arc_opa(spinner, LV_OPA_30, LV_PART_MAIN);
-  lv_obj_set_style_arc_color(spinner, lv_color_white(), LV_PART_INDICATOR);
-  lv_obj_set_style_arc_width(spinner, 3, LV_PART_MAIN);
-  lv_obj_set_style_arc_width(spinner, 3, LV_PART_INDICATOR);
-  lv_obj_center(spinner);
+  lv_label_set_text(ctx->confirm_label, "Processing...");
 
-  /* Call the confirm callback deferred so the spinner renders first */
+  /* Call the confirm callback deferred so the state renders first */
   lv_timer_create(deferred_confirm_cb, 50, ctx);
 }
 
@@ -352,6 +343,7 @@ lv_obj_t *step_booking_confirm_create(lv_obj_t *parent,
 
   lv_obj_t *back_btn = lv_btn_create(btn_row);
   lv_obj_add_style(back_btn, &kiosk_style_btn_secondary, 0);
+  lv_obj_add_style(back_btn, &kiosk_style_btn_secondary, LV_STATE_PRESSED);
   lv_obj_set_width(back_btn, LV_SIZE_CONTENT);
   lv_obj_set_flex_grow(back_btn, 1);
   lv_obj_t *back_label = lv_label_create(back_btn);

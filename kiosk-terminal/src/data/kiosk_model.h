@@ -77,6 +77,7 @@ typedef struct {
   char court_name[KIOSK_MAX_NAME_LEN]; /* "" -> displayed as "Any" */
   int32_t duration_min;
   char estimated_wait[16]; /* pre-formatted, e.g. "~60 min" */
+  time_t estimated_start_time; /* epoch seconds */
 } queue_row_t;
 
 /* Pricing config (mirrors ProductsConfig); carried in the board snapshot so

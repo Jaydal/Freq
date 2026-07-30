@@ -95,4 +95,54 @@ describe('Sports Caster Payload Generator', () => {
     expect(payload.display.pages[0].text).toBe('Wait: 5min');
     expect(payload.display.pages[1].text).toBe('Next: 2:30PM');
   });
+
+  it('hideIfEmpty skips page when variable is empty', () => {
+    const payload = generatePayload('court-1', { current: null, upcoming: [] }, {
+      displaySequence: {
+        idle: { interval: 10, pages: [
+          { text: 'Has data: {next_name}', hideIfEmpty: ['next_name'] },
+          { text: 'Fallback page' },
+        ] },
+        prep: { interval: 10, pages: [] },
+        game: { interval: 10, pages: [] },
+      },
+    });
+
+    expect(payload.display.pages.length).toBe(1);
+    expect(payload.display.pages[0].text).toBe('Fallback page');
+  });
+
+  it('showIfEmpty skips page when variable is not empty', () => {
+    const payload = generatePayload('court-1', { current: null, upcoming: [] }, {
+      nextName: 'Alice',
+      displaySequence: {
+        idle: { interval: 10, pages: [
+          { text: 'No one waiting', showIfEmpty: ['next_name'] },
+          { text: '{next_name} is next' },
+        ] },
+        prep: { interval: 10, pages: [] },
+        game: { interval: 10, pages: [] },
+      },
+    });
+
+    expect(payload.display.pages.length).toBe(1);
+    expect(payload.display.pages[0].text).toBe('Alice is next');
+  });
+
+  it('showIfEmpty shows page when variable is empty', () => {
+    const payload = generatePayload('court-1', { current: null, upcoming: [] }, {
+      displaySequence: {
+        idle: { interval: 10, pages: [
+          { text: 'No one waiting', showIfEmpty: ['next_name'] },
+          { text: 'Always shown' },
+        ] },
+        prep: { interval: 10, pages: [] },
+        game: { interval: 10, pages: [] },
+      },
+    });
+
+    expect(payload.display.pages.length).toBe(2);
+    expect(payload.display.pages[0].text).toBe('No one waiting');
+    expect(payload.display.pages[1].text).toBe('Always shown');
+  });
 });

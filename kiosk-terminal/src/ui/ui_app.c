@@ -308,6 +308,7 @@ static lv_obj_t *build_existing_queue_screen(lv_obj_t *parent) {
 
   lv_obj_t *cancel_btn = lv_btn_create(btn_row);
   lv_obj_add_style(cancel_btn, &kiosk_style_btn_secondary, 0);
+  lv_obj_add_style(cancel_btn, &kiosk_style_btn_secondary, LV_STATE_PRESSED);
   lv_obj_set_style_border_color(cancel_btn, KIOSK_COLOR_RED_500, 0);
   lv_obj_set_style_bg_color(cancel_btn, KIOSK_COLOR_RED_500, LV_STATE_PRESSED);
   lv_obj_set_style_bg_opa(cancel_btn, LV_OPA_10, LV_STATE_PRESSED);
@@ -320,6 +321,7 @@ static lv_obj_t *build_existing_queue_screen(lv_obj_t *parent) {
 
   lv_obj_t *another_btn = lv_btn_create(btn_row);
   lv_obj_add_style(another_btn, &kiosk_style_btn_primary, 0);
+  lv_obj_add_style(another_btn, &kiosk_style_btn_primary, LV_STATE_PRESSED);
   lv_obj_set_flex_grow(another_btn, 1);
   lv_obj_t *another_label = lv_label_create(another_btn);
   lv_label_set_text(another_label, LV_SYMBOL_PLUS " Book Another");
@@ -335,13 +337,6 @@ static lv_obj_t *build_booting_screen(lv_obj_t *parent) {
   lv_obj_set_size(root, lv_pct(100), lv_pct(100));
   lv_obj_set_flex_flow(root, LV_FLEX_FLOW_COLUMN);
   lv_obj_set_flex_align(root, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-
-  lv_obj_t *spinner = lv_spinner_create(root, 1000, 60);
-  lv_obj_set_size(spinner, 64, 64);
-  lv_obj_set_style_arc_color(spinner, KIOSK_COLOR_ZINC_800, LV_PART_MAIN);
-  lv_obj_set_style_arc_color(spinner, KIOSK_COLOR_EMERALD_500, LV_PART_INDICATOR);
-  lv_obj_set_style_arc_width(spinner, 6, LV_PART_MAIN);
-  lv_obj_set_style_arc_width(spinner, 6, LV_PART_INDICATOR);
 
   lv_obj_t *title = lv_label_create(root);
   lv_label_set_text(title, "Connecting to Network...");

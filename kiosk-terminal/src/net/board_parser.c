@@ -87,6 +87,7 @@ bool board_parse(const char *json, size_t len, kiosk_board_t *out) {
       get_str(q, "courtName", dst->court_name, sizeof(dst->court_name));
       dst->duration_min = (int32_t)get_num(q, "durationMin");
       get_str(q, "estimatedWait", dst->estimated_wait, sizeof(dst->estimated_wait));
+      dst->estimated_start_time = (time_t)get_num(q, "estimatedStartTime");
     }
   }
 

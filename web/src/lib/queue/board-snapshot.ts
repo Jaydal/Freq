@@ -44,6 +44,7 @@ export interface BoardQueueRow {
   courtName: string;
   durationMin: number;
   estimatedWait: string;
+  estimatedStartTime: number; // epoch seconds
 }
 
 /* Pricing/durations config (from the `settings` table) so the kiosk doesn't
@@ -144,24 +145,45 @@ export async function getBoardSnapshot(supabase: SupabaseClient): Promise<BoardS
       }
     : { hasOffer: false, queueEntryId: '', memberId: '', playerFirstName: '', courtName: '', durationMin: 0, expiresAt: 0 };
 
-  const queue: BoardQueueRow[] = (waiting ?? []).map((q: any, i: number) => ({
-    id: q.id,
-    memberId: q.member_id,
-    position: i + 1,
-    firstName: nameById.get(q.member_id)?.first ?? '?',
-    // W9: Truncate last name to initial only
-    lastName: nameById.get(q.member_id)?.last ? nameById.get(q.member_id)!.last.charAt(0) : '',
-    matchType: q.party_size === 4 ? '2v2' : '1v1',
-    matchTitle: q.match_title ?? '',
-    courtName: q.court_id ? (courtNameById.get(q.court_id) ?? '') : '',
-    durationMin: q.duration ?? 0,
-    estimatedWait: getEstimatedWait(i + 1),
-  }));
+  const serverTime = Math.floor(Date.now() / 1000);
 
+  // Initialize court free times for simulation
+  const courtFreeTimes = courts.map(c => {
+    if (c.startTime > 0) {
+      return c.startTime + (c.durationMin * 60) + c.prepTimeSec;
+    }
+    return serverTime;
+  });
+
+  const queue: BoardQueueRow[] = (waiting ?? []).map((q: any, i: number) => {
+    // Sort ascending so courtFreeTimes[0] is the earliest available court
+    courtFreeTimes.sort((a, b) => a - b);
+    
+    let estStart = courtFreeTimes[0];
+    // If the earliest court is in the past, they start now
+    if (estStart < serverTime) estStart = serverTime;
+
+    // Simulate this queue entry taking that court
+    const duration = q.duration ?? 30; // fallback to 30 mins
+    courtFreeTimes[0] = estStart + (duration * 60) + prepTimeSec;
+
+    return {
+      id: q.id,
+      memberId: q.member_id,
+      position: i + 1,
+      firstName: nameById.get(q.member_id)?.first ?? '?',
+      // W9: Truncate last name to initial only
+      lastName: nameById.get(q.member_id)?.last ? nameById.get(q.member_id)!.last.charAt(0) : '',
+      matchType: q.party_size === 4 ? '2v2' : '1v1',
+      matchTitle: q.match_title ?? '',
+      courtName: q.court_id ? (courtNameById.get(q.court_id) ?? '') : '',
+      durationMin: q.duration ?? 0,
+      estimatedWait: getEstimatedWait(i + 1),
+      estimatedStartTime: estStart,
+    };
+  });
   // effectivePrepSec is applied per-court on the client using durationMin; we
   // pass the raw configured prepTimeSec so the kiosk applies the same rule.
-
-  const serverTime = Math.floor(Date.now() / 1000);
 
   return { config, courts, nowServing, queue, serverTime };
 }

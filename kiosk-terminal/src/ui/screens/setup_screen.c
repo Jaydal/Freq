@@ -321,6 +321,7 @@ lv_obj_t *setup_screen_create(lv_obj_t *parent, setup_done_cb_t on_done, void *u
 
   lv_obj_t *scan_btn = lv_btn_create(ssid_row);
   lv_obj_add_style(scan_btn, &kiosk_style_btn_secondary, 0);
+  lv_obj_add_style(scan_btn, &kiosk_style_btn_secondary, LV_STATE_PRESSED);
   lv_obj_set_width(scan_btn, 80);
   lv_obj_set_style_min_height(scan_btn, 40, 0);
   lv_obj_t *scan_label = lv_label_create(scan_btn);
@@ -350,6 +351,7 @@ lv_obj_t *setup_screen_create(lv_obj_t *parent, setup_done_cb_t on_done, void *u
 
   lv_obj_t *reset_btn = lv_btn_create(btn_row);
   lv_obj_add_style(reset_btn, &kiosk_style_btn_secondary, 0);
+  lv_obj_add_style(reset_btn, &kiosk_style_btn_secondary, LV_STATE_PRESSED);
   lv_obj_set_flex_grow(reset_btn, 1);
   lv_obj_set_style_min_height(reset_btn, KIOSK_MIN_TOUCH_PX, 0);
 
@@ -360,7 +362,8 @@ lv_obj_t *setup_screen_create(lv_obj_t *parent, setup_done_cb_t on_done, void *u
   lv_obj_add_event_cb(reset_btn, reset_cb, LV_EVENT_CLICKED, ctx);
 
   lv_obj_t *save_btn = lv_btn_create(btn_row);
-  lv_obj_set_style_bg_color(save_btn, KIOSK_COLOR_EMERALD_500, 0);
+  lv_obj_add_style(save_btn, &kiosk_style_btn_primary, 0);
+  lv_obj_add_style(save_btn, &kiosk_style_btn_primary, LV_STATE_PRESSED);
   lv_obj_set_flex_grow(save_btn, 1);
   lv_obj_set_style_min_height(save_btn, KIOSK_MIN_TOUCH_PX, 0);
 

@@ -8,6 +8,7 @@ export interface QueueEntryDisplay {
   courtName: string;
   duration: number;
   estimatedWait: string;
+  estimatedStartTime: number;
 }
 
 interface Props {
@@ -27,6 +28,7 @@ export function QueueList({ entries }: Props) {
         <span className="w-24 shrink-0">Match</span>
         <span className="w-14 shrink-0">Court</span>
         <span className="w-10 shrink-0 text-right">Time</span>
+        <span className="w-16 text-right shrink-0">Wait</span>
         <span className="w-16 text-right shrink-0">ETA</span>
       </div>
       <div className="space-y-1">
@@ -48,6 +50,9 @@ export function QueueList({ entries }: Props) {
             <span className="text-xs text-zinc-500 w-14 shrink-0">{e.courtName || 'Any'}</span>
             <span className="text-xs text-zinc-500 w-10 shrink-0 text-right">{e.duration}m</span>
             <span className="text-xs text-zinc-400 w-16 text-right shrink-0">{e.estimatedWait}</span>
+            <span className="text-xs text-zinc-400 w-16 text-right shrink-0">
+              {new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: 'numeric', hour12: true }).format(new Date(e.estimatedStartTime))}
+            </span>
           </div>
         ))}
       </div>

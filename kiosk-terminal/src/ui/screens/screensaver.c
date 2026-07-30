@@ -39,6 +39,7 @@ lv_obj_t *screensaver_create(lv_obj_t *parent, void (*on_click)(void *), void *u
     lv_obj_set_style_bg_opa(btn, LV_OPA_TRANSP, 0);
     lv_obj_set_style_border_width(btn, 0, 0);
     lv_obj_set_style_shadow_width(btn, 0, 0);
+    kiosk_theme_disable_transitions(btn);
     lv_obj_add_event_cb(btn, click_cb, LV_EVENT_CLICKED, on_click);
 
     return root;

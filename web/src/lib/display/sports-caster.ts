@@ -22,6 +22,7 @@ export interface DisplaySequenceSection {
     effect?: string;
     durationSeconds?: number;
     hideIfEmpty?: string[];
+    showIfEmpty?: string[];
     zones?: {
       panelStart: number;
       panelEnd: number;
@@ -138,6 +139,13 @@ export function generatePayload(
           return v === undefined || v === '';
         });
         if (allEmpty) continue;
+      }
+      if (tpl.showIfEmpty && tpl.showIfEmpty.length > 0) {
+        const anyFilled = tpl.showIfEmpty.some(k => {
+          const v = subVars[k];
+          return v !== undefined && v !== '';
+        });
+        if (anyFilled) continue;
       }
       if (tpl.zones) {
         const pageDuration = tpl.durationSeconds ?? section.interval;

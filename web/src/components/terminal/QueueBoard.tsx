@@ -173,17 +173,36 @@ export function QueueBoard() {
     ? courts.find(c => c.id === prioritizedOffer.court_id)?.name ?? 'Court'
     : '';
 
-  const queueDisplay: QueueEntryDisplay[] = queueEntries.map((q, i) => ({
-    id: q.id,
-    position: i + 1,
-    firstName: memberNames[q.member_id]?.first ?? '?',
-    lastName: memberNames[q.member_id]?.last ?? '',
-    matchType: q.party_size === 4 ? '2v2' : '1v1',
-    matchTitle: q.match_title || '',
-    courtName: courts.find(c => c.id === q.court_id)?.name ?? '',
-    duration: q.duration,
-    estimatedWait: getEstimatedWait(i + 1),
-  }));
+  const serverTime = Date.now();
+  const courtFreeTimes = courts.map(c => {
+    if (c.start_time) {
+      const startMs = new Date(c.start_time).getTime();
+      return startMs + (c.duration * 60000) + (prepTimeSec * 1000);
+    }
+    return serverTime;
+  });
+
+  const queueDisplay: QueueEntryDisplay[] = queueEntries.map((q, i) => {
+    courtFreeTimes.sort((a, b) => a - b);
+    let estStart = courtFreeTimes[0];
+    if (estStart < serverTime) estStart = serverTime;
+
+    const duration = q.duration ?? 30;
+    courtFreeTimes[0] = estStart + (duration * 60000) + (prepTimeSec * 1000);
+
+    return {
+      id: q.id,
+      position: i + 1,
+      firstName: memberNames[q.member_id]?.first ?? '?',
+      lastName: memberNames[q.member_id]?.last ?? '',
+      matchType: q.party_size === 4 ? '2v2' : '1v1',
+      matchTitle: q.match_title || '',
+      courtName: courts.find(c => c.id === q.court_id)?.name ?? '',
+      duration: q.duration,
+      estimatedWait: getEstimatedWait(i + 1),
+      estimatedStartTime: estStart,
+    };
+  });
 
   return (
     <div className="min-h-screen bg-black p-3">

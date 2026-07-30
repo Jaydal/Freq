@@ -87,6 +87,11 @@ lv_obj_t *queue_list_create(lv_obj_t *parent, const queue_row_t *rows, uint8_t c
     char wait_buf[32];
     snprintf(wait_buf, sizeof(wait_buf), "Wait: %s", q->estimated_wait);
     set_label(row, wait_buf, &lv_font_montserrat_14, kiosk_theme_color_text_muted());
+
+    char actual_time_buf[32];
+    struct tm *timeinfo = localtime(&q->estimated_start_time);
+    strftime(actual_time_buf, sizeof(actual_time_buf), "ETA: %I:%M %p", timeinfo);
+    set_label(row, actual_time_buf, &lv_font_montserrat_14, kiosk_theme_color_text_muted());
   }
 
   return list;
