@@ -96,6 +96,9 @@ void setup() {
   // MUST initialize display first to allocate contiguous DMA memory
   // before WiFi starts and fragments the heap!
   g_display->begin();
+  
+  // Play the premium 10-second pickleball boot animation
+  g_display->playBootAnimation(10000);
 
   // ── Boot branching: portal vs normal ──────────────────────────────────────
   if (!g_portal.isConfigured()) {
@@ -120,6 +123,10 @@ void setup() {
     g_portal.startPortal();
     return;
   }
+
+  // ── Sync time via SNTP ─────────────────────────────────────────────────────
+  configTime(0, 0, "pool.ntp.org", "time.nist.gov");
+  log_i("[main] SNTP time sync initiated");
 
   // ── Normal boot: MQTT client with saved settings ───────────────────────────
   g_mqtt = new MqttDisplayClient(*g_display);

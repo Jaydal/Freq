@@ -1,6 +1,6 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { getBoardSnapshot } from './board-snapshot';
-import { completeExpiredGames, processCourtQueue } from './queue-processor';
+import { processAllCourts, processCourtQueue } from './queue-processor';
 import { publishBoard } from '@/lib/mqtt';
 
 let g = globalThis as typeof globalThis & {
@@ -20,10 +20,7 @@ export async function publishBoardOnce(): Promise<void> {
   const supabase = serviceClient();
   if (!supabase) return;
   try {
-    const freedCourts = await completeExpiredGames();
-    for (const courtId of freedCourts) {
-      await processCourtQueue(courtId);
-    }
+    await processAllCourts();
     const snapshot = await getBoardSnapshot(supabase);
     await publishBoard(JSON.stringify(snapshot));
   } catch (err) {

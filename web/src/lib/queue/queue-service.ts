@@ -21,7 +21,7 @@ async function getRates(supabase: Awaited<ReturnType<typeof createClient>>): Pro
 }
 
 function calcCharge(rates: Record<string, number>, duration: number, partySize: number): number {
-  const config: ProductsConfig = { matchTypes: [], durations: [], rates, prepTimeSec: 0 };
+  const config: ProductsConfig = { matchTypes: [], durations: [], rates, };
   const cost = getCost(config, duration, partySize);
   if (cost === 0) throw new Error(`No price configured for ${duration} min`);
   return cost;
@@ -190,12 +190,20 @@ export async function joinQueue(params: JoinQueueParams): Promise<QueueEntry> {
   if (params.courtId) insertData.court_id = params.courtId;
   if (params.matchTitle) insertData.match_title = params.matchTitle;
 
+  // Deduct wallet upfront for joining the queue
+  await deductWallet(params.memberId, charge, "QUEUE_DEPOSIT_" + Date.now().toString());
+
   const { data: entry, error } = await supabase
     .from('queue_entries')
     .insert(insertData)
     .select()
     .single();
-  if (error) throw new Error(error.message);
+  
+  if (error) {
+    // Refund if insertion failed
+    await refundWallet(params.memberId, charge, "QUEUE_DEPOSIT_" + Date.now().toString(), "Queue join failed");
+    throw new Error(error.message);
+  }
 
   return entry as QueueEntry;
 }

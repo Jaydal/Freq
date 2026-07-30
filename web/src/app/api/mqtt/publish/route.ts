@@ -31,7 +31,7 @@ export async function POST(request: Request) {
     state: result.data.state,
     schedule: { upcoming: [] },
     serverTime: Math.floor(Date.now() / 1000),
-    display: { pages },
+    blocks: [{ startEpoch: Math.floor(Date.now() / 1000), endEpoch: 2147483647, pages }],
   };
 
   const ok = await publishDisplay(result.data.courtId, payload);

@@ -6,6 +6,7 @@ export interface SubPage {
   align?: 'left' | 'center' | 'right';
   scrollSpeed?: number;
   durationMs: number;
+  font?: string;
 }
 
 export interface DisplayLine {
@@ -17,6 +18,7 @@ export interface DisplayLine {
   scrollSpeed?: number;
   marginTop?: number;
   marginBottom?: number;
+  font?: string;
 }
 
 export interface DisplayZone {
@@ -37,7 +39,6 @@ export interface ZonePage {
 
 export interface DisplaySequenceConfig {
   idle: { interval: number; pages: ZonePage[] };
-  prep: { interval: number; pages: ZonePage[] };
   game: { interval: number; pages: ZonePage[] };
 }
 

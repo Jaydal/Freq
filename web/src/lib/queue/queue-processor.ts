@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { isSlotAvailable } from './booking-engine';
-import { getCost, ProductsConfig, effectivePrepSec } from '@/lib/products-config-types';
+import { getCost, ProductsConfig } from '@/lib/products-config-types';
 import { publishDisplay } from '@/lib/mqtt';
 import { generatePayload } from '@/lib/display/sports-caster';
 
@@ -16,19 +16,17 @@ export async function processCourtQueue(courtId: string): Promise<void> {
     .from('games')
     .select('id, duration, start_time, status')
     .eq('court_id', courtId)
-    .in('status', ['In Progress', 'Scheduled'])
-    .gte('start_time', now.toISOString());
+    .in('status', ['In Progress', 'Scheduled']);
 
   if (activeGames && activeGames.length > 0) {
     for (const game of activeGames) {
-      const { data: settings } = await supabase.from('settings').select('value').eq('key', 'preparationTime').single();
-      const rawPrepSec = parseInt(settings?.value ?? '300', 10);
-      const prepSec = isNaN(rawPrepSec) ? 300 : rawPrepSec;
-      const effectivePrep = effectivePrepSec(game.duration, prepSec);
-      const gameEnd = new Date(new Date(game.start_time).getTime() + effectivePrep * 1000 + game.duration * 60_000);
-      if (gameEnd > now) return;
+      if (!game.start_time) continue;
+      const gameEnd = new Date(new Date(game.start_time).getTime() + game.duration * 60_000);
+      if (gameEnd > now) return; // Court is still occupied by this game
     }
   }
+
+  // If we get here, there are no active games blocking the court.
 
   // Get the oldest waiting entries ordered by created_at
   const { data: waiting } = await supabase
@@ -52,16 +50,18 @@ export async function processCourtQueue(courtId: string): Promise<void> {
     // Calculate charge
     const { data: pricesRow } = await supabase.from('settings').select('value').eq('key', 'prices').single();
     const rates: Record<string, number> = pricesRow?.value ? JSON.parse(pricesRow.value) : { '30': 150, '60': 300, '90': 450 };
-    const config: ProductsConfig = { matchTypes: [], durations: [], rates, prepTimeSec: 0 };
-    const charge = getCost(config, entry.duration, entry.party_size);
+    const config: ProductsConfig = { matchTypes: [], durations: [], rates };
+    const getCost = (d: number, s: number) => {
+      return Math.round((rates[String(d)] ?? 0) * (d / 30) / (s === 4 ? 2 : 1));
+    };
+    const charge = getCost(entry.duration, entry.party_size);
     if (charge === 0) continue;
 
     // Check member is still active and has sufficient balance
     const { data: member } = await supabase.from('members').select('status').eq('id', entry.member_id).single();
     if (!member || member.status !== 'Active') continue;
 
-    const { data: wallet } = await supabase.from('wallets').select('id, balance').eq('member_id', entry.member_id).single();
-    if (!wallet || wallet.balance < charge) continue;
+    // Wallet was already verified and deducted when joining the queue.
 
     // Create the game
     const matchType = entry.party_size === 4 ? '2v2' : '1v1';
@@ -94,30 +94,7 @@ export async function processCourtQueue(courtId: string): Promise<void> {
       continue;
     }
 
-    // Update court status
-    await supabase.from('courts').update({ status: 'In Game', last_activity: now.toISOString() }).eq('id', courtId);
-
-    // Deduct wallet
-    const { data: updated } = await supabase
-      .from('wallets')
-      .update({ balance: wallet.balance - charge })
-      .eq('id', wallet.id)
-      .eq('balance', wallet.balance)
-      .select()
-      .single();
-
-    if (!updated) {
-      await supabase.from('games').update({ status: 'Cancelled' }).eq('id', game.id);
-      await supabase.from('courts').update({ status: 'Available' }).eq('id', courtId);
-      continue;
-    }
-
-    await supabase.from('wallet_transactions').insert({
-      wallet_id: wallet.id,
-      amount: -charge,
-      type: 'game_fee',
-      reference_number: game.id,
-    });
+    // Wallet was already deducted when they joined the queue.
 
     // Update queue entry to completed
     await supabase.from('queue_entries').update({ status: 'completed', court_id: courtId, updated_at: now.toISOString() }).eq('id', entry.id);
@@ -157,93 +134,18 @@ export async function processCourtQueue(courtId: string): Promise<void> {
       courtName: court.name,
       queueCount: courtQueueCount,
       displaySequence,
-      prepTimeSec,
+      
     }));
 
     return;
   }
 }
 
-export async function completeExpiredGames(): Promise<string[]> {
-  const supabase = await createClient();
-  const { data: settings } = await supabase.from('settings').select('value').eq('key', 'preparationTime').single();
-  const rawPrepSec = parseInt(settings?.value ?? '300', 10);
-  const prepSec = isNaN(rawPrepSec) ? 300 : rawPrepSec;
-  const now = new Date();
-
-  const { data: activeGames } = await supabase
-    .from('games')
-    .select('id, court_id, duration, start_time')
-    .in('status', ['In Progress', 'Scheduled']);
-
-  const freedCourtIds = new Set<string>();
-
-  for (const game of activeGames ?? []) {
-    if (!game.start_time) continue;
-    const effectivePrep = effectivePrepSec(game.duration, prepSec);
-    const gameEnd = new Date(new Date(game.start_time).getTime() + effectivePrep * 1000 + game.duration * 60_000);
-    if (now >= gameEnd) {
-      await supabase
-        .from('games')
-        .update({ status: 'Completed', end_time: now.toISOString() })
-        .eq('id', game.id);
-      freedCourtIds.add(game.court_id);
-    }
-  }
-
-  if (freedCourtIds.size > 0) {
-    const { data: settings } = await supabase
-      .from('settings')
-      .select('key, value')
-      .in('key', ['displaySequence', 'preparationTime']);
-
-    let displaySequence;
-    try {
-      const v = settings?.find(s => s.key === 'displaySequence')?.value;
-      if (v) displaySequence = JSON.parse(v);
-    } catch {}
-
-    const rawPrepSec = parseInt(settings?.find(s => s.key === 'preparationTime')?.value ?? '300', 10);
-    const prepTimeSec = isNaN(rawPrepSec) ? 300 : rawPrepSec;
-
-    const { data: courts } = await supabase
-      .from('courts')
-      .select('id, name')
-      .in('id', [...freedCourtIds]);
-
-    const { data: waiting } = await supabase
-      .from('queue_entries')
-      .select('court_id')
-      .eq('status', 'waiting');
-
-    const courtQueueCounts = new Map<string, number>();
-    if (waiting) {
-      for (const e of waiting) {
-        courtQueueCounts.set(e.court_id, (courtQueueCounts.get(e.court_id) ?? 0) + 1);
-      }
-    }
-
-    for (const court of courts ?? []) {
-      const payload = generatePayload(court.id, { current: null, upcoming: [] }, {
-        courtName: court.name,
-        queueCount: courtQueueCounts.get(court.id) ?? 0,
-        displaySequence,
-        prepTimeSec,
-      });
-      publishDisplay(court.id, payload);
-    }
-  }
-
-  return [...freedCourtIds];
-}
-
 export async function processAllCourts(): Promise<void> {
-  const freedCourts = await completeExpiredGames();
   const supabase = await createClient();
   const { data: courts } = await supabase.from('courts').select('id');
   if (!courts) return;
-  const courtIds = new Set([...courts.map(c => c.id), ...freedCourts]);
-  for (const id of courtIds) {
-    await processCourtQueue(id);
+  for (const c of courts) {
+    await processCourtQueue(c.id);
   }
 }

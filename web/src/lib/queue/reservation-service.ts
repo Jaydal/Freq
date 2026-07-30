@@ -2,13 +2,13 @@ import { createClient } from '@/lib/supabase/server';
 import { isSlotAvailable } from './booking-engine';
 import { publishDisplay } from '@/lib/mqtt';
 import { generatePayload } from '@/lib/display/sports-caster';
-import { effectivePrepSec, getCost, ProductsConfig } from '@/lib/products-config-types';
+import { getCost, ProductsConfig } from '@/lib/products-config-types';
 
 async function getChargeAmount(duration: number, partySize: number): Promise<number> {
   const supabase = await createClient();
   const { data: pricesRow } = await supabase.from('settings').select('value').eq('key', 'prices').single();
   const rates: Record<string, number> = pricesRow?.value ? JSON.parse(pricesRow.value) : { '30': 150, '60': 300, '90': 450 };
-  const config: ProductsConfig = { matchTypes: [], durations: [], rates, prepTimeSec: 0 };
+  const config: ProductsConfig = { matchTypes: [], durations: [], rates, };
   const cost = getCost(config, duration, partySize);
   if (cost === 0) throw new Error(`No price configured for ${duration} min`);
   return cost;
@@ -43,12 +43,8 @@ export async function finalizeBooking(entryId: string): Promise<{ success: boole
 
   const charge = await getChargeAmount(entry.duration, entry.party_size);
 
-  const { data: prepRow } = await supabase.from('settings').select('value').eq('key', 'preparationTime').single();
-  const prepSec = parseInt(prepRow?.value ?? '300', 10);
-  const effectivePrep = effectivePrepSec(entry.duration, isNaN(prepSec) ? 300 : prepSec);
-
   const now = new Date();
-  const end = new Date(now.getTime() + effectivePrep * 1000 + entry.duration * 60_000);
+  const end = new Date(now.getTime() + entry.duration * 60_000);
   if (!entry.court_id || !(await isSlotAvailable(entry.court_id, now, end, entry.id))) {
     await supabase.from('queue_entries').update({ status: 'waiting', court_id: null, expires_at: null, updated_at: new Date().toISOString() }).eq('id', entryId);
     return { success: false, error: 'Court no longer available' };

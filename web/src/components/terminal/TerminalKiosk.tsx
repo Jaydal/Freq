@@ -15,7 +15,8 @@ import { ReservationOffer } from './ReservationOffer';
 import { BookingSuccess } from './BookingSuccess';
 import { ErrorScreen } from './ErrorScreen';
 import type { ProductsConfig } from '@/lib/products-config-types';
-import { getCost, effectivePrepSec } from '@/lib/products-config-types';
+import { getCost } from '@/lib/products-config-types';
+import { fetchBoardSnapshot } from '@/app/terminal/queue/actions';
 import { AlertCircle, Trash2, Plus } from 'lucide-react';
 import { getRfidFormats } from '@/lib/rfid';
 
@@ -192,8 +193,8 @@ export function TerminalKiosk() {
           const busyIds = new Set<string>();
           for (const c of snap.courts ?? []) {
             if (!c.startTime) continue;
-            const prep = (c.durationMin ?? 0) < 5 ? 0 : (c.prepTimeSec ?? 0);
-            const end = c.startTime + prep + (c.durationMin ?? 0) * 60;
+            const prep = 0;
+            const end = c.startTime + (c.durationMin ?? 0) * 60;
             if (now < end) busyIds.add(c.id);
           }
           setCourts(snap.courts.map((c: any) => ({
@@ -226,7 +227,7 @@ export function TerminalKiosk() {
           matchTypes: products?.matchTypes ?? ['1v1', '2v2'],
           durations: products?.durations ?? [30, 60, 90],
           rates: rates ?? { '30': 150, '60': 300, '90': 450 },
-          prepTimeSec: isNaN(prepTimeSec) ? 300 : prepTimeSec,
+          
         });
       }
       await fetchCourts();
@@ -244,32 +245,18 @@ export function TerminalKiosk() {
   }
 
   async function fetchCourts() {
-    const { data: games } = await supabase
-      .from('games')
-      .select('id, court_id, duration, status, start_time')
-      .in('status', ['In Progress', 'Scheduled']);
-    const { data: allCourts } = await supabase
-      .from('courts')
-      .select('*')
-      .order('name');
-    if (!allCourts) return;
-
-    // A court is busy purely from its schedule: a game whose window
-    // (start_time + prep + duration) still includes now.
-    const prepSec = config?.prepTimeSec ?? 300;
-    const now = Date.now();
-    const busyIds = new Set<string>();
-    for (const g of (games ?? [])) {
-      if (!g.start_time) continue;
-      const prep = effectivePrepSec(g.duration ?? 0, prepSec);
-      const end = new Date(g.start_time).getTime() + prep * 1000 + (g.duration ?? 0) * 60_000;
-      if (now < end) busyIds.add(g.court_id);
-    }
-    setCourts(allCourts.map((c: any) => ({
-      id: c.id,
-      name: c.name,
-      status: busyIds.has(c.id) ? 'Playing' : 'Available',
-    })));
+    try {
+      const snap = await fetchBoardSnapshot();
+      const nowSec = Date.now() / 1000;
+      setCourts(snap.courts.map((c: any) => {
+        const isPlayingNow = c.startTime > 0 && c.startTime <= nowSec;
+        return {
+          id: c.id,
+          name: c.name,
+          status: isPlayingNow ? 'Playing' : 'Available',
+        };
+      }));
+    } catch {}
   }
 
   function focusRfid() {

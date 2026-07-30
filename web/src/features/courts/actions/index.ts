@@ -67,7 +67,40 @@ export async function endGame(gameId: string, courtId: string, refund: boolean =
     }
   }
 
-  await publishDisplay(courtId, generatePayload(courtId, { current: null, upcoming: [] }));
+  const { data: court } = await supabase.from('courts').select('name').eq('id', courtId).single();
+  const { data: waiting } = await supabase.from('queue_entries').select('id').eq('status', 'waiting');
+  const queueCount = waiting?.length ?? 0;
+
+  const { data: settings } = await supabase.from('settings').select('value').eq('key', 'displaySequence').single();
+  let displaySequence;
+  try { if (settings?.value) displaySequence = JSON.parse(settings.value); } catch {}
+
+  await publishDisplay(courtId, generatePayload(courtId, { current: null, upcoming: [] }, { 
+    courtName: court?.name ?? courtId,
+    queueCount,
+    displaySequence
+  }));
+  await processCourtQueue(courtId);
+  publishBoardOnce().catch(() => {});
+  revalidatePath('/courts');
+}
+
+export async function updateGameDuration(gameId: string, durationMin: number, courtId: string) {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from('games')
+    .update({ duration: durationMin })
+    .eq('id', gameId);
+  
+  if (error) throw new Error(error.message);
+
+  const { data: court } = await supabase.from('courts').select('name').eq('id', courtId).single();
+  const { data: queueCount } = await supabase.from('queue_entries').select('id', { count: 'exact' }).eq('status', 'waiting');
+  const { data: settings } = await supabase.from('settings').select('value').eq('key', 'displaySequence').single();
+  let displaySequence;
+  try { if (settings?.value) displaySequence = JSON.parse(settings.value); } catch {}
+
+  // Republish display and board
   await processCourtQueue(courtId);
   publishBoardOnce().catch(() => {});
   revalidatePath('/courts');
@@ -135,6 +168,14 @@ export async function requeueGame(gameId: string, courtId: string, position: num
     .from('games')
     .update({ status: 'Completed', end_time: now })
     .eq('id', gameId);
+
+  const { data: court } = await supabase.from('courts').select('name').eq('id', courtId).single();
+  const { data: currentWait } = await supabase.from('queue_entries').select('id').eq('status', 'waiting');
+  
+  await publishDisplay(courtId, generatePayload(courtId, { current: null, upcoming: [] }, { 
+    courtName: court?.name ?? courtId,
+    queueCount: currentWait?.length ?? 0
+  }));
 
   await processCourtQueue(courtId);
 

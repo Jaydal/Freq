@@ -26,5 +26,10 @@ export async function POST(request: Request) {
   });
 
   if (error) return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+
+  // Fire background cleanup & publish without blocking the response
+  const publishUrl = new URL('/api/display/publish-all', request.url).toString();
+  fetch(publishUrl, { method: 'POST' }).catch(console.error);
+
   return NextResponse.json({ success: true });
 }

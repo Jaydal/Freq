@@ -21,10 +21,9 @@ export interface DisplayPage {
     scale?: number;
     valign?: string;
     lines: {
-      subpages?: { text: string; color: string; effect: string; align?: string; scrollSpeed?: number; durationMs: number; bgColor?: string; font?: string }[];
+      subpages?: { text: string; color: string; effect: string; align?: string; scrollSpeed?: number; durationMs: number; bgColor?: string }[];
       text?: string;  // legacy compat
       color?: string;
-      font?: string;
       effect?: string;
       marginTop?: number;
       marginBottom?: number;
@@ -45,7 +44,7 @@ export interface DisplayPayload {
   action?: string;
   state: 'OPEN' | 'PLAYING' | 'MAINTENANCE';
   schedule: {
-    current?: { name: string; startTime: string; startTimeEpoch?: number; durationMinutes: number } | null;
+    current?: { name: string; startTime: string; startTimeEpoch?: number; durationMinutes: number; prepTimeSec?: number } | null;
     upcoming: { name: string }[];
   };
   serverTime: number;

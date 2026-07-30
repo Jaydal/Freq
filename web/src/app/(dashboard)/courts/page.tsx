@@ -2,7 +2,6 @@ export const dynamic = 'force-dynamic';
 import { createClient } from '@/lib/supabase/server';
 import { getCourtStatus } from '@/lib/mqtt';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import DisplayControl from '@/components/courts/DisplayControl';
 import QueuePanel from '@/components/courts/QueuePanel';
 import HealthBadge from '@/components/ui/HealthBadge';
 import CourtDeviceBadge from '@/components/courts/CourtDeviceBadge';
@@ -25,12 +24,17 @@ function formatDateTime(isoString: string | null) {
 export default async function CourtsPage() {
   const supabase = await createClient();
 
-  const [{ data: courts }, { data: activeGames }, { data: recentGames }] = await Promise.all([
+  const { data: settings } = await supabase.from('settings').select('value').eq('key', 'preparationTime').single();
+  const rawPrepSec = parseInt(settings?.value ?? '300', 10);
+  const prepTimeSec = isNaN(rawPrepSec) ? 300 : rawPrepSec;
+  const now = Date.now();
+
+  const [{ data: courts }, { data: candidateGames }, { data: recentGames }] = await Promise.all([
     supabase.from('courts').select('*').order('name'),
     supabase
       .from('games')
       .select('*, game_players(*, members(*))')
-      .eq('status', 'In Progress')
+      .in('status', ['In Progress', 'Scheduled'])
       .order('start_time', { ascending: false }),
     supabase
       .from('games')
@@ -38,6 +42,14 @@ export default async function CourtsPage() {
       .order('created_at', { ascending: false })
       .limit(10),
   ]);
+
+  const activeGames = (candidateGames ?? []).filter((g: any) => {
+    if (!g.start_time) return false;
+    const startMs = new Date(g.start_time).getTime();
+    if (now < startMs) return false;
+    const endMs = startMs + prepTimeSec * 1000 + (g.duration ?? 0) * 60000;
+    return now < endMs;
+  });
 
   const courtList = (courts ?? []).map((c: any) => ({ id: c.id, name: c.name }));
 
@@ -57,13 +69,14 @@ export default async function CourtsPage() {
       {/* Court status cards */}
       <div className="grid gap-6 md:grid-cols-2">
         {(courts ?? []).map((court: any) => {
-          const activeGame = (activeGames ?? []).find((g: any) => g.court_id === court.id);
+          const activeGame = activeGames.find((g: any) => g.court_id === court.id);
           const deviceStatus = getCourtStatus(court.id);
+          const computedStatus = activeGame ? 'In Game' : 'Available';
 
           return (
             <Card
               key={court.id}
-              className={court.status === 'In Game' ? 'border-red-500' : 'border-green-500'}
+              className={activeGame ? 'border-red-500' : 'border-green-500'}
             >
               <CardHeader className="pb-2">
                 <CardTitle className="text-2xl flex justify-between items-center gap-2">
@@ -71,11 +84,11 @@ export default async function CourtsPage() {
                   <div className="flex items-center gap-2">
                     <CourtDeviceBadge courtId={court.id} initialStatus={deviceStatus} />
                     <span className={`text-sm px-3 py-1 rounded-full ${
-                      court.status === 'In Game'
+                      activeGame
                         ? 'bg-red-100 text-red-800'
                         : 'bg-green-100 text-green-800'
                     }`}>
-                      {court.status}
+                      {computedStatus}
                     </span>
                     <ManageCourtDialog court={court} />
                   </div>
@@ -95,7 +108,7 @@ export default async function CourtsPage() {
                         ))}
                       </ul>
                     </div>
-                    <GameActions gameId={activeGame.id} courtId={court.id} courtName={court.name} />
+                    <GameActions gameId={activeGame.id} courtId={court.id} courtName={court.name} currentDuration={activeGame.duration} />
                   </div>
                 ) : (
                   <div className="text-zinc-500 py-8 text-center">Court is currently available.</div>
@@ -106,10 +119,9 @@ export default async function CourtsPage() {
         })}
       </div>
 
-      {/* Queue + Display management */}
-      <div className="grid gap-6 md:grid-cols-2">
+      {/* Queue management */}
+      <div className="grid gap-6">
         <QueuePanel courts={courtList} />
-        <DisplayControl courts={courtList} />
       </div>
 
       {/* Booking History */}
@@ -159,17 +171,29 @@ export default async function CourtsPage() {
                         ${Number(game.charge_amount).toFixed(2)}
                       </td>
                       <td className="py-3">
-                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium border ${
-                          game.status === 'In Progress'
-                            ? 'bg-red-500/10 text-red-400 border-red-500/20'
-                            : game.status === 'Completed'
-                            ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                            : game.status === 'Cancelled'
-                            ? 'bg-zinc-500/10 text-zinc-400 border-zinc-500/20'
-                            : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
-                        }`}>
-                          {game.status}
-                        </span>
+                        {(() => {
+                          let displayStatus = game.status;
+                          if (displayStatus === 'In Progress' || displayStatus === 'Scheduled') {
+                            const startMs = new Date(game.start_time).getTime();
+                            const endMs = startMs + prepTimeSec * 1000 + (game.duration ?? 0) * 60000;
+                            if (now < startMs) displayStatus = 'Scheduled';
+                            else if (now >= endMs) displayStatus = 'Completed';
+                            else displayStatus = 'In Progress';
+                          }
+                          return (
+                            <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium border ${
+                              displayStatus === 'In Progress'
+                                ? 'bg-red-500/10 text-red-400 border-red-500/20'
+                                : displayStatus === 'Completed'
+                                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                                : displayStatus === 'Cancelled'
+                                ? 'bg-zinc-500/10 text-zinc-400 border-zinc-500/20'
+                                : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                            }`}>
+                              {displayStatus}
+                            </span>
+                          );
+                        })()}
                       </td>
                     </tr>
                   );

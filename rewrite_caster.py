@@ -1,80 +1,19 @@
-import { DisplayPayload, DisplayPage } from '../mqtt';
+import re
 
-export interface ScheduleData {
-  maintenance?: boolean;
-  current?: {
-    name: string;
-    startTime: string;
-    durationMinutes: number;
-    matchTitle?: string;
-    matchType?: string;
-    players?: string;
-  } | null;
-  upcoming: { name: string }[];
-}
+with open('web/src/lib/display/sports-caster.ts', 'r') as f:
+    content = f.read()
 
-export interface DisplaySequenceSection {
-  interval: number;
-  pages: {
-    text?: string;
-    line1?: string;
-    color?: string;
-    effect?: string;
-    durationSeconds?: number;
-    hideIfEmpty?: string[];
-    showIfEmpty?: string[];
-    zones?: {
-      panelStart: number;
-      panelEnd: number;
-      borderRows?: { start: number; end: number }[];
-      scale?: number;
-      valign?: string;
-      lines: { text: string; color: string; effect: string; align?: string; scrollSpeed?: number; marginTop?: number; marginBottom?: number; subpages?: { text: string; color: string; effect: string; align?: string; scrollSpeed?: number; durationMs: number }[] }[];
-    }[];
-  }[];
-}
+# We want to replace the `export function generatePayload` onwards
+# with our new version.
 
-export interface DisplaySequenceConfig {
-  idle: DisplaySequenceSection;
-  game: DisplaySequenceSection;
-}
-
-const DEFAULT_SEQUENCE: DisplaySequenceConfig = {
-  idle: { interval: 10, pages: [{ text: "{court_name}" }, { text: "{queue_count} IN QUEUE" }] },
-  game: { interval: 10, pages: [{ text: "{match_title}" }, { text: "{timer} LEFT" }, { text: "{queue_count} IN QUEUE" }] },
-};
-
-
-const CHAR_W = 5;
-const SPACING = 1;
-function textWidthPx(text: string, scale: number) {
-  let w = 0;
-  let first = true;
-  for (let i = 0; i < text.length; i++) {
-    if (text[i] !== ' ') {
-      if (!first) w += SPACING * scale;
-      w += CHAR_W * scale;
-      first = false;
-    }
-  }
-  return w;
-}
-
-function substituteVars(text: string, vars: Record<string, string>): string {
-  let result = text;
-  for (const [key, val] of Object.entries(vars)) {
-    result = result.replaceAll(`{${key}}`, val);
-  }
-  return result;
-}
-
-export function generatePayload(
+replacement = """export function generatePayload(
   courtId: string,
   schedule: ScheduleData,
   opts?: {
     courtName?: string;
     queueCount?: number;
     displaySequence?: DisplaySequenceConfig;
+    prepTimeSec?: number;
     nextName?: string;
     nextMatch?: string;
     nextWait?: string;
@@ -85,6 +24,7 @@ export function generatePayload(
 ): DisplayPayload {
   const nowMs = Date.now();
   const serverTime = Math.floor(nowMs / 1000);
+  const prepTimeSec = opts?.prepTimeSec ?? 300;
   const courtName = opts?.courtName ?? courtId;
   const queueCount = opts?.queueCount ?? 0;
   const sequence = opts?.displaySequence ?? DEFAULT_SEQUENCE;
@@ -100,7 +40,7 @@ export function generatePayload(
     const subVars: Record<string, string> = {
       court_name: courtName,
       match_info: c?.name ?? '',
-      match_title: c?.matchTitle || c?.name || '',
+      match_title: c?.matchTitle || c?.name || (state === 'PLAYING' ? 'IN GAME' : ''),
       match_type: c?.matchType ?? '',
       duration: c ? `${c.durationMinutes}min` : '',
       players: c?.players ?? '',
@@ -116,10 +56,10 @@ export function generatePayload(
     if (section) {
       for (const tpl of section.pages) {
         if (tpl.hideIfEmpty && tpl.hideIfEmpty.length > 0) {
-          if (tpl.hideIfEmpty.every(k => !subVars[k.replace(/[{}]/g, '')])) continue;
+          if (tpl.hideIfEmpty.every(k => !subVars[k])) continue;
         }
         if (tpl.showIfEmpty && tpl.showIfEmpty.length > 0) {
-          if (tpl.showIfEmpty.some(k => subVars[k.replace(/[{}]/g, '')])) continue;
+          if (tpl.showIfEmpty.some(k => subVars[k])) continue;
         }
         
         if (tpl.zones) {
@@ -139,12 +79,10 @@ export function generatePayload(
                     effect: sp.effect === 'paginate' ? 'STATIC' : sp.effect,
                     ...(sp.align && sp.align !== 'center' ? { align: sp.align } : {}),
                     ...(sp.scrollSpeed != null && sp.scrollSpeed !== 1 ? { scrollSpeed: sp.scrollSpeed } : {}),
-                    ...(sp.font ? { font: sp.font } : {}),
                     durationMs: sp.durationMs,
                   })),
                   ...(line.marginTop != null && line.marginTop !== 0 ? { marginTop: line.marginTop } : {}),
                   ...(line.marginBottom != null && line.marginBottom !== 2 ? { marginBottom: line.marginBottom } : {}),
-                  ...(line.font ? { font: line.font } : {}),
                 };
               }
               const rawText = substituteVars(line.text, subVars);
@@ -156,12 +94,10 @@ export function generatePayload(
                   effect: eff === 'paginate' ? 'STATIC' : eff,
                   ...(line.align && line.align !== 'center' ? { align: line.align } : {}),
                   ...(line.scrollSpeed != null && line.scrollSpeed !== 1 ? { scrollSpeed: line.scrollSpeed } : {}),
-                  ...(line.font ? { font: line.font } : {}),
                   durationMs: pageDuration * 1000,
                 }],
                 ...(line.marginTop != null && line.marginTop !== 0 ? { marginTop: line.marginTop } : {}),
                 ...(line.marginBottom != null && line.marginBottom !== 2 ? { marginBottom: line.marginBottom } : {}),
-                ...(line.font ? { font: line.font } : {}),
               };
             }),
           }));
@@ -198,7 +134,7 @@ export function generatePayload(
       const c = schedule.current;
       const cStart = Math.floor(new Date(c.startTime).getTime() / 1000);
       const startEpoch = isNaN(cStart) ? serverTime : cStart;
-      const endEpoch = startEpoch + c.durationMinutes * 60;
+      const endEpoch = startEpoch + prepTimeSec + c.durationMinutes * 60;
       
       blocks.push({
         startEpoch,
@@ -213,7 +149,7 @@ export function generatePayload(
       for (const u of schedule.upcoming) {
         const uDur = (u as any).durationMinutes || 30; // fallback to 30 min
         const startEpoch = nextStartEpoch;
-        const endEpoch = startEpoch + uDur * 60;
+        const endEpoch = startEpoch + prepTimeSec + uDur * 60;
         
         blocks.push({
           startEpoch,
@@ -242,6 +178,7 @@ export function generatePayload(
             return isNaN(t) ? serverTime : t;
           })(),
           durationMinutes: schedule.current.durationMinutes,
+          prepTimeSec,
         }
       : null,
     upcoming: schedule.upcoming,
@@ -258,3 +195,13 @@ export function generatePayload(
     blocks
   };
 }
+"""
+
+start_idx = content.find('export function generatePayload')
+if start_idx == -1:
+    print("Could not find generatePayload")
+else:
+    new_content = content[:start_idx] + replacement
+    with open('web/src/lib/display/sports-caster.ts', 'w') as f:
+        f.write(new_content)
+    print("Rewritten sports-caster.ts")

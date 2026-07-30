@@ -91,14 +91,6 @@ bool board_parse(const char *json, size_t len, kiosk_board_t *out) {
     }
   }
 
-  /* sync system clock with server time to avoid SNTP dependency */
-  time_t server_time = (time_t)get_num(root, "serverTime");
-  if (server_time > 1700000000) { /* basic sanity check, must be > year 2023 */
-    struct timeval tv;
-    tv.tv_sec = server_time;
-    tv.tv_usec = 0;
-    settimeofday(&tv, NULL);
-  }
 
   cJSON_Delete(root);
   return true;

@@ -1,0 +1,8 @@
+@@ -48,7 +48,6 @@
+     startTime: string;
+     startTimeEpoch?: number; // fallback for native devices
+     durationMinutes: number;
+-    prepTimeSec?: number;
+   } | null;
+   upcoming: {
+     name: string;

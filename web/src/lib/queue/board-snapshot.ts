@@ -19,7 +19,6 @@ export interface BoardCourt {
   matchTitle: string;
   startTime: number; // epoch seconds; 0 when not active
   durationMin: number;
-  prepTimeSec: number;
   players: { firstName: string; lastName: string }[];
 }
 
@@ -52,7 +51,6 @@ export interface BoardQueueRow {
 export interface BoardConfig {
   durations: number[];
   rates: number[];
-  prepTimeSec: number;
 }
 
 export interface BoardSnapshot {
@@ -67,7 +65,7 @@ export async function getBoardSnapshot(supabase: SupabaseClient): Promise<BoardS
   // W14: TODO - Replace `any` casts with generated Database types from Supabase CLI
   const [{ data: settingsRows }, { data: games }, { data: allCourts }, { data: waiting }, { data: offers }] =
     await Promise.all([
-      supabase.from('settings').select('key, value').in('key', ['products', 'prices', 'preparationTime']),
+      supabase.from('settings').select('key, value').in('key', ['products', 'prices']),
       supabase
         .from('games')
         .select('id, court_id, match_type, match_title, duration, status, start_time, courts!inner(name), game_players(member_id, members!inner(first_name, last_name))')
@@ -80,13 +78,11 @@ export async function getBoardSnapshot(supabase: SupabaseClient): Promise<BoardS
 
   const settings = new Map<string, string>((settingsRows ?? []).map((r: any) => [r.key, r.value]));
   const tryParse = (v: string | undefined): any => { try { return v ? JSON.parse(v) : undefined; } catch { return undefined; } };
-  const prepTimeSec = parseInt(settings.get('preparationTime') ?? '', 10) || 300;
   const durations: number[] = tryParse(settings.get('products'))?.durations ?? [30, 60, 90];
   const priceMap: Record<string, number> = tryParse(settings.get('prices')) ?? { '30': 150, '60': 300, '90': 450 };
   const config: BoardConfig = {
     durations,
     rates: durations.map((d) => priceMap[String(d)] ?? 0),
-    prepTimeSec,
   };
 
   const gameByCourt = new Map<string, any>();
@@ -95,24 +91,26 @@ export async function getBoardSnapshot(supabase: SupabaseClient): Promise<BoardS
   const courts: BoardCourt[] = (allCourts ?? []).map((c: any) => {
     const game = gameByCourt.get(c.id);
     if (game && game.start_time) {
-      return {
-        id: c.id,
-        name: c.name,
-        matchType: game.match_type ?? '',
-        matchTitle: game.match_title ?? '',
-        startTime: Math.floor(new Date(game.start_time).getTime() / 1000),
-        durationMin: game.duration ?? 0,
-        prepTimeSec,
-        players: (game.game_players ?? []).map((gp: any) => ({
-          firstName: gp.members?.first_name ?? '',
-          // W9: Truncate last name to initial only for privacy on public MQTT
-          lastName: gp.members?.last_name ? gp.members.last_name.charAt(0) : '',
-        })),
-      };
+      const startMs = new Date(game.start_time).getTime();
+      const endMs = startMs + (game.duration ?? 0) * 60000;
+      if (Date.now() < endMs) {
+        return {
+          id: c.id,
+          name: c.name,
+          matchType: game.match_type ?? '',
+          matchTitle: game.match_title ?? '',
+          startTime: Math.floor(startMs / 1000),
+          durationMin: game.duration ?? 0,
+          players: (game.game_players ?? []).map((gp: any) => ({
+            firstName: gp.members?.first_name ?? '',
+            lastName: gp.members?.last_name ? gp.members.last_name.charAt(0) : '',
+          })),
+        };
+      }
     }
     return {
       id: c.id, name: c.name, matchType: '', matchTitle: '',
-      startTime: 0, durationMin: 0, prepTimeSec, players: [],
+      startTime: 0, durationMin: 0,  players: [],
     };
   });
 
@@ -150,7 +148,7 @@ export async function getBoardSnapshot(supabase: SupabaseClient): Promise<BoardS
   // Initialize court free times for simulation
   const courtFreeTimes = courts.map(c => {
     if (c.startTime > 0) {
-      return c.startTime + (c.durationMin * 60) + c.prepTimeSec;
+      return c.startTime + (c.durationMin * 60) ;
     }
     return serverTime;
   });
@@ -165,7 +163,7 @@ export async function getBoardSnapshot(supabase: SupabaseClient): Promise<BoardS
 
     // Simulate this queue entry taking that court
     const duration = q.duration ?? 30; // fallback to 30 mins
-    courtFreeTimes[0] = estStart + (duration * 60) + prepTimeSec;
+    courtFreeTimes[0] = estStart + (duration * 60) ;
 
     return {
       id: q.id,

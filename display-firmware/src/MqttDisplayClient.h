@@ -41,6 +41,12 @@ struct DisplayPage {
   uint16_t durationSeconds;
 };
 
+struct DisplayBlock {
+  long startEpoch;
+  long endEpoch;
+  std::vector<DisplayPage> pages;
+};
+
 typedef void (*CourtChangeCallback)(const char* newCourtId);
 
 class MqttDisplayClient {
@@ -87,6 +93,11 @@ private:
   void connectWiFi();
   bool connectMqtt();
   void publishOnline();
+
+  std::vector<DisplayBlock> _blocks;
+  long _serverTime = 0;
+  unsigned long _localTimeAtServerSync = 0;
+  int _currentBlockIndex = -1;
 
   std::vector<DisplayPage> _playlist;
   size_t _currentPageIndex = 0;

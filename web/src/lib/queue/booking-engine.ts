@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { isOverlapping, type CourtInfo } from './index';
-import { effectivePrepSec } from '@/lib/products-config-types';
+
 
 export async function findAvailableCourt(
   _requestedStart: Date,
@@ -9,12 +9,8 @@ export async function findAvailableCourt(
   excludeCourtId?: string
 ): Promise<CourtInfo | null> {
   const supabase = await createClient();
-  const { data: settings } = await supabase.from('settings').select('value').eq('key', 'preparationTime').single();
-  const rawPrepSec = parseInt(settings?.value ?? '300', 10);
-  const prepSec = isNaN(rawPrepSec) ? 300 : rawPrepSec;
-  const effectivePrep = effectivePrepSec(duration, prepSec);
   const now = new Date();
-  const end = new Date(now.getTime() + effectivePrep * 1000 + duration * 60_000);
+  const end = new Date(now.getTime() + duration * 60_000);
 
   const { data: courts } = await supabase
     .from('courts')
@@ -39,9 +35,6 @@ export async function isSlotAvailable(
   excludeQueueEntryId?: string
 ): Promise<boolean> {
   const supabase = await createClient();
-  const { data: settings } = await supabase.from('settings').select('value').eq('key', 'preparationTime').single();
-  const rawPrepSec = parseInt(settings?.value ?? '300', 10);
-  const prepSec = isNaN(rawPrepSec) ? 300 : rawPrepSec;
 
   const { data: overlapping } = await supabase
     .from('games')
@@ -64,8 +57,7 @@ export async function isSlotAvailable(
     for (const offer of offered) {
       if (excludeQueueEntryId && offer.id === excludeQueueEntryId) continue;
       const offerStart = new Date(offer.requested_start);
-      const effectiveOfferPrep = effectivePrepSec(offer.duration, prepSec);
-      const offerEnd = new Date(offerStart.getTime() + effectiveOfferPrep * 1000 + offer.duration * 60_000);
+      const offerEnd = new Date(offerStart.getTime() + offer.duration * 60_000);
       if (isOverlapping(start, end, offerStart, offerEnd)) {
         return false;
       }
@@ -82,9 +74,8 @@ export async function isSlotAvailable(
   if (!straddling) return true;
 
   for (const game of straddling) {
-    const effectivePrep = effectivePrepSec(game.duration, prepSec);
     const gameEnd = new Date(
-      new Date(game.start_time).getTime() + effectivePrep * 1000 + game.duration * 60_000
+      new Date(game.start_time).getTime() + game.duration * 60_000
     );
     if (isOverlapping(start, end, new Date(game.start_time), gameEnd)) {
       return false;

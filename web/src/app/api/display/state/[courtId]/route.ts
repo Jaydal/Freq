@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { ensureConnected, getDisplayState, getCourtStatus, isBrokerConnected } from '@/lib/mqtt';
 import { generatePayload } from '@/lib/display/sports-caster';
-import { effectivePrepSec } from '@/lib/products-config-types';
+
 
 export async function GET(
   _request: Request,
@@ -12,7 +12,7 @@ export async function GET(
   await ensureConnected();
 
   let display = getDisplayState(courtId);
-  let gameInfo: { startTime: string; duration: number; prepTimeSec: number } | null = null;
+  let gameInfo: { startTime: string; duration: number; } | null = null;
 
   if (!display) {
     const supabase = await createClient();
@@ -26,19 +26,11 @@ export async function GET(
       .single();
 
     if (game) {
-      const { data: settings } = await supabase
-        .from('settings')
-        .select('value')
-        .eq('key', 'preparationTime')
-        .single();
-      const rawPrep = parseInt(settings?.value ?? '300', 10);
-      const prepTimeSec = isNaN(rawPrep) ? 300 : rawPrep;
-
       display = generatePayload(courtId, {
         current: { name: game.match_title ?? '', startTime: game.start_time, durationMinutes: game.duration },
         upcoming: []
       });
-      gameInfo = { startTime: game.start_time, duration: game.duration, prepTimeSec };
+      gameInfo = { startTime: game.start_time, duration: game.duration };
     }
   }
 

@@ -15,9 +15,9 @@ interface SectionState {
   pages: ZonePage[];
 }
 
-type SectionKey = 'idle' | 'prep' | 'game';
+type SectionKey = 'idle' |  'game';
 
-const SECTIONS: SectionKey[] = ['idle', 'prep', 'game'];
+const SECTIONS: SectionKey[] = ['idle', 'game'];
 
 const DEFAULTS: string = JSON.stringify({
   idle: {

@@ -115,18 +115,10 @@ void Hub75Driver::begin() {
   _matrix->fillScreen(green);
   _matrix->flipDMABuffer();
   delay(500);
-  _ballAngle = 0;
-  _ballOrbits = 0;
-  _ballX = WF2_RES_X / 2 - 1;
-  _ballY = WF2_RES_Y / 2 - 1;
-  _splashStartTime = millis();
-  _ballLastMove = _splashStartTime;
-  _splashActive = true;
   redraw();
 }
 
 void Hub75Driver::clear() {
-  _splashActive = false;
   _zoneCount = 0;
   for (int i = 0; i < MAX_ZONES; i++) _zones[i].hasData = false;
   _fallbackText = "";
@@ -269,30 +261,7 @@ void Hub75Driver::runDiagnosticSequence() {
 void Hub75Driver::update() {
   if (!_matrix || _otaActive) return;
 
-  if (_splashActive) {
-    unsigned long now = millis();
-    if (_ballOrbits >= SPLASH_ORBITS) {
-      _splashActive = false;
-      redraw();
-      return;
-    }
-    if (now - _ballLastMove >= 60) {
-      _ballLastMove = now;
-      _ballAngle += 0.1f;
-      if (_ballAngle >= TWO_PI) {
-        _ballAngle -= TWO_PI;
-        _ballOrbits++;
-      }
-      int cx = WF2_RES_X / 2 - 1;
-      int cy = WF2_RES_Y / 2 - 1;
-      int rx = 44;
-      int ry = 4;
-      _ballX = cx + (int)(rx * cosf(_ballAngle));
-      _ballY = cy + (int)(ry * sinf(_ballAngle));
-      redraw();
-    }
-    return;
-  }
+
 
   bool needsRedraw = false;
   unsigned long now = millis();
@@ -362,15 +331,7 @@ String Hub75Driver::substituteTimer(const String& text) const {
 void Hub75Driver::redraw() {
   if (!_matrix || _otaActive) return;
 
-  if (_splashActive) {
-    _matrix->clearScreen();
-    uint16_t green = _matrix->color565(0, 255, 0);
-    for (int dy = 0; dy < BALL_SIZE; dy++)
-      for (int dx = 0; dx < BALL_SIZE; dx++)
-        drawPixelMapped(_ballX + dx, _ballY + dy, green);
-    _matrix->flipDMABuffer();
-    return;
-  }
+
 
   _matrix->clearScreen();
 
@@ -550,5 +511,80 @@ void Hub75Driver::drawPixelMapped(int x, int y, uint16_t color) {
   if (x < 0 || x >= WF2_RES_X || y < 0 || y >= WF2_RES_Y) return;
   _matrix->drawPixel(x, y, color);
 }
+
+  void Hub75Driver::playBootAnimation(unsigned long durationMs) {
+    if (!_matrix) return;
+    
+    unsigned long start = millis();
+    float x = 48.0f;
+    float y = 8.0f;
+    float vx = 60.0f; // pixels per sec
+    float vy = 40.0f;
+    float r = 3.5f;
+
+    uint16_t ballColor = _matrix->color565(255, 255, 0);
+    uint16_t holeColor = _matrix->color565(0, 0, 0);
+
+    while (millis() - start < durationMs) {
+      unsigned long elapsed = millis() - start;
+      float dt = 1.0f / 60.0f;
+
+      // Phase 1: Expand (0 - 1s)
+      float currentR = r;
+      if (elapsed < 1000) {
+        currentR = r * (elapsed / 1000.0f);
+      } 
+      // Phase 2: Spin (1 - 3s)
+      else if (elapsed < 3000) {
+        // Do nothing, just stay in center
+      } 
+      // Phase 3: Bounce (3 - 8s)
+      else if (elapsed < 8000) {
+        x += vx * dt;
+        y += vy * dt;
+        if (x - currentR < 0 || x + currentR > 96) { vx = -vx; x = constrain(x, currentR, 96 - currentR); }
+        if (y - currentR < 0 || y + currentR > 16) { vy = -vy; y = constrain(y, currentR, 16 - currentR); }
+      } 
+      // Phase 4: Return to center & Text (8 - 10s)
+      else {
+        // move towards center
+        x += (48.0f - x) * 0.05f;
+        y += (8.0f - y) * 0.05f;
+      }
+
+      _matrix->clearScreen();
+
+      // Draw ball
+      _matrix->fillCircle((int)x, (int)y, (int)currentR, ballColor);
+      
+      // Draw spinning holes
+      if (currentR > 2.0f) {
+        float angle = elapsed * 0.005f;
+        for (int i = 0; i < 4; i++) {
+          float a = angle + i * (PI / 2.0f);
+          int hx = x + cos(a) * (currentR * 0.5f);
+          int hy = y + sin(a) * (currentR * 0.5f);
+          _matrix->drawPixel(hx, hy, holeColor);
+        }
+      }
+
+      // Draw text in phase 4
+      if (elapsed > 8500) {
+        int alpha = map(elapsed, 8500, 9500, 0, 255);
+        alpha = constrain(alpha, 0, 255);
+        if (alpha > 50) {
+          int textWidth = 60; // approx width for "LED READY!" in 5x7 font
+          _matrix->setCursor(48 - (textWidth / 2), 4);
+          _matrix->setTextColor(_matrix->color565(alpha, alpha, alpha));
+          _matrix->print("LED READY!");
+        }
+      }
+
+      _matrix->flipDMABuffer();
+      delay(16); // ~60fps
+    }
+    _matrix->clearScreen();
+    _matrix->flipDMABuffer();
+  }
 
 #endif

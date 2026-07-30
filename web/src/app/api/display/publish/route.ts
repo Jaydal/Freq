@@ -23,9 +23,11 @@ export async function POST(request: Request) {
     state: 'MAINTENANCE',
     schedule: { upcoming: [] },
     serverTime: Math.floor(Date.now() / 1000),
-    display: {
+    blocks: [{
+      startEpoch: Math.floor(Date.now() / 1000),
+      endEpoch: 2147483647,
       pages: [{ text: `${line1} ${line2} ${line3}`.trim(), color: '#FFFFFF', effect: 'SCROLL', durationSeconds: 10 }]
-    }
+    }]
   });
   return NextResponse.json({ ok }, { status: ok ? 200 : 503 });
 }

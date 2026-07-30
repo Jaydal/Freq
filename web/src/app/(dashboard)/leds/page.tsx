@@ -69,7 +69,9 @@ export default function LedsPage() {
       body: JSON.stringify({
         mac: selectedMac,
         action: 'OVERRIDE',
-        display: {
+        blocks: [{
+          startEpoch: Math.floor(Date.now() / 1000),
+          endEpoch: 2147483647,
           pages: [{
             durationSeconds: 10,
             zones: [{
@@ -78,7 +80,7 @@ export default function LedsPage() {
               lines: [{ text: overrideText, color: overrideColor, effect: 'SCROLL' }],
             }],
           }],
-        },
+        }],
       }),
     });
     setShowOverrideModal(false);

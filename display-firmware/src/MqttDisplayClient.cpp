@@ -124,6 +124,48 @@ void MqttDisplayClient::update() {
     }
   }
 
+  // --- TIME-BLOCKED PLAYLIST LOGIC ---
+  if (!_blocks.empty() && _wasOnline) {
+    long currentEpoch = time(NULL);
+    if (currentEpoch < 1700000000) {
+      currentEpoch = _serverTime + ((millis() - _localTimeAtServerSync) / 1000);
+    }
+    
+    int newBlockIndex = -1;
+    for (size_t i = 0; i < _blocks.size(); i++) {
+      if (currentEpoch >= _blocks[i].startEpoch && currentEpoch < _blocks[i].endEpoch) {
+        newBlockIndex = i;
+        break;
+      }
+    }
+    if (newBlockIndex == -1) {
+      newBlockIndex = _blocks.size() - 1; // fallback to last block (idle)
+    }
+
+    if (newBlockIndex != _currentBlockIndex) {
+      log_i("[mqtt] Transitioning to block index %d", newBlockIndex);
+      _currentBlockIndex = newBlockIndex;
+      _playlist = _blocks[newBlockIndex].pages;
+      _currentPageIndex = 0;
+      _lastPageChangeTime = millis();
+      memset(_subpageIdx, 0, sizeof(_subpageIdx));
+      memset(_lastSubChange, 0, sizeof(_lastSubChange));
+      applyCurrentPage();
+
+      // Reset Timer
+      long remainingSec = _blocks[newBlockIndex].endEpoch - currentEpoch;
+      if (remainingSec < 0) remainingSec = 0;
+      long totalSec = _blocks[newBlockIndex].endEpoch - _blocks[newBlockIndex].startEpoch;
+      
+      // If it's the last block (Idle), don't show timer. (Or if total is extremely large)
+      if (newBlockIndex < (int)_blocks.size() - 1 && totalSec < 86400) {
+         _driver.setTimer(remainingSec * 1000, totalSec * 1000, millis());
+      } else {
+         _driver.setTimer(0, 1000, millis());
+      }
+    }
+  }
+
   if (!_playlist.empty() && _wasOnline) {
     unsigned long now = millis();
     unsigned long durationMs = (unsigned long)_playlist[_currentPageIndex].durationSeconds * 1000;
@@ -351,14 +393,10 @@ bool MqttDisplayClient::connectMqtt() {
     log_i("[health] Subscribed to freq/display/discover and %s", _cmdTopic);
     log_i("[health] Subscribed to %s (retained msg will follow)", _displayTopic);
     publishOnline();
-    _driver.showRow(0, "READY - WAITING FOR QUEUE...");
-    _driver.update();
     return true;
   }
 
   log_i("[health] MQTT FAILED");
-  _driver.showRow(0, "MQTT FAILED - RETRYING...");
-  _driver.update();
   return false;
 }
 
@@ -395,7 +433,7 @@ void MqttDisplayClient::handleDiscover() {
 
 void MqttDisplayClient::handleCmdMessage(uint8_t* payload, unsigned int len) {
   JsonDocument doc;
-  DeserializationError error = deserializeJson(doc, payload, len);
+  DeserializationError error = deserializeJson(doc, payload, len, DeserializationOption::NestingLimit(20));
   if (error) {
     log_i("[mqtt-cmd] JSON parse failed: %s", error.c_str());
     return;
@@ -526,7 +564,7 @@ void MqttDisplayClient::handleMessage(uint8_t* payload, unsigned int len) {
   }
 
   JsonDocument doc;
-  DeserializationError error = deserializeJson(doc, payload, len);
+  DeserializationError error = deserializeJson(doc, payload, len, DeserializationOption::NestingLimit(20));
   if (error) {
     log_i("[mqtt] JSON parse failed: %s", error.c_str());
     return;
@@ -553,37 +591,19 @@ void MqttDisplayClient::handleMessage(uint8_t* payload, unsigned int len) {
     }
   }
 
-  JsonArray pages = doc["display"]["pages"];
-  if (pages.isNull()) {
-    const char* msg = doc["message"] | "";
-    if (strlen(msg) == 0 && doc["line1"].is<const char*>()) {
-      msg = doc["line1"] | "";
-    }
-    if (strlen(msg) > 0) {
-      DisplayPage p;
-      p.durationSeconds = 10;
-      p.zoneCount = 1;
-      p.zones[0].panelStart = 0;
-      p.zones[0].panelEnd = 2;
-      p.zones[0].lineCount = 1;
-      p.zones[0].borderCount = 0;
-      p.zones[0].scale = 0;
-      p.zones[0].valign = "middle";
-      {
-        SubPage sp;
-        sp.text = msg;
-        sp.color = doc["color"] | "#FFFFFF";
-        sp.effect = doc["animation"] | "SCROLL";
-        sp.align = "center";
-        sp.scrollSpeed = 1.0f;
-        sp.durationMs = 5000;
-        p.zones[0].lines[0].subpages.push_back(sp);
-      }
-      p.zones[0].lines[0].marginTop = 0;
-      p.zones[0].lines[0].marginBottom = 2;
-      _playlist.push_back(p);
-    }
-  } else {
+  _blocks.clear();
+  _currentBlockIndex = -1;
+  _playlist.clear();
+  _serverTime = doc["serverTime"] | 0;
+  _localTimeAtServerSync = millis();
+
+  JsonArray blocks = doc["blocks"];
+  for (JsonObject blockObj : blocks) {
+    DisplayBlock b;
+    b.startEpoch = blockObj["startEpoch"] | 0;
+    b.endEpoch = blockObj["endEpoch"] | 0;
+    
+    JsonArray pages = blockObj["pages"];
     for (JsonObject page : pages) {
       DisplayPage p;
       p.durationSeconds = page["durationSeconds"] | 10;
@@ -671,29 +691,11 @@ void MqttDisplayClient::handleMessage(uint8_t* payload, unsigned int len) {
         z.lines[0].marginBottom = 2;
         p.zoneCount = 1;
       }
-
-      _playlist.push_back(p);
+      b.pages.push_back(p);
     }
+    _blocks.push_back(b);
   }
 
-  // Parse schedule data for live {timer} countdown
-  JsonObject currentSchedule = doc["schedule"]["current"];
-  if (!currentSchedule.isNull()) {
-    long startTimeEpoch = currentSchedule["startTimeEpoch"] | 0;
-    long durationMinutes = currentSchedule["durationMinutes"] | 0;
-    long prepTimeSec = currentSchedule["prepTimeSec"] | 0;
-    long serverTime = doc["serverTime"] | 0;
-    log_i("[mqtt] schedule: startEpoch=%ld duration=%ldmin prep=%lds serverTime=%ld", startTimeEpoch, durationMinutes, prepTimeSec, serverTime);
-    if (startTimeEpoch > 0 && serverTime > 0) {
-      long endTimeEpoch = startTimeEpoch + prepTimeSec + durationMinutes * 60;
-      long remainingSec = endTimeEpoch - serverTime;
-      if (remainingSec < 0) remainingSec = 0;
-      unsigned long remainingMs = (unsigned long)remainingSec * 1000;
-      unsigned long totalMs = ((unsigned long)durationMinutes * 60 + (unsigned long)prepTimeSec) * 1000;
-      log_i("[mqtt] timer set: remaining=%lds total=%lds", remainingSec, totalMs / 1000);
-      _driver.setTimer(remainingMs, totalMs, millis());
-    }
-  }
 
   _currentPageIndex = 0;
   _lastPageChangeTime = millis();

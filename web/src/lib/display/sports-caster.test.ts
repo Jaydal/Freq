@@ -8,8 +8,8 @@ describe('Sports Caster Payload Generator', () => {
     expect(payload.courtId).toBe('court-1');
     expect(payload.state).toBe('OPEN');
     // Default idle sequence: court_name, queue_count
-    expect(payload.display.pages[0].text).toContain('court-1');
-    expect(payload.display.pages[1].text).toContain('0 IN QUEUE');
+    expect(payload.blocks[0].pages[0].text).toContain('court-1');
+    expect(payload.blocks[0].pages[1].text).toContain('0 IN QUEUE');
     expect(payload.serverTime).toBeGreaterThan(1700000000);
   });
 
@@ -21,9 +21,9 @@ describe('Sports Caster Payload Generator', () => {
     
     expect(payload.state).toBe('PLAYING');
     // Default game sequence: match_info, {timer} LEFT, queue_count
-    expect(payload.display.pages[0].text).toBe('Jane vs John');
-    expect(payload.display.pages[1].text).toBe('{timer} LEFT');
-    expect(payload.display.pages[2].text).toContain('0 IN QUEUE');
+    expect(payload.blocks[0].pages[0].text).toBe('Jane vs John');
+    expect(payload.blocks[0].pages[1].text).toBe('{timer} LEFT');
+    expect(payload.blocks[0].pages[2].text).toContain('0 IN QUEUE');
   });
 
   it('includes serverTime and schedule metadata', () => {
@@ -33,7 +33,6 @@ describe('Sports Caster Payload Generator', () => {
     });
     
     expect(payload.serverTime).toBeGreaterThan(1700000000);
-    expect(payload.schedule.current?.prepTimeSec).toBe(300);
     expect(payload.schedule.current?.startTimeEpoch).toBeGreaterThan(1700000000);
   });
 
@@ -43,8 +42,8 @@ describe('Sports Caster Payload Generator', () => {
       queueCount: 5,
     });
     
-    expect(payload.display.pages[0].text).toContain('Court A');
-    expect(payload.display.pages[1].text).toContain('5 IN QUEUE');
+    expect(payload.blocks[0].pages[0].text).toContain('Court A');
+    expect(payload.blocks[0].pages[1].text).toContain('5 IN QUEUE');
   });
 
   it('passes through new per-line fields in zone payloads', () => {
@@ -65,12 +64,12 @@ describe('Sports Caster Payload Generator', () => {
             }],
           }],
         }] },
-        prep: { interval: 10, pages: [] },
+        
         game: { interval: 10, pages: [] },
       },
     });
 
-    const zone = payload.display.pages[0].zones?.[0];
+    const zone = payload.blocks[0].pages[0].zones?.[0];
     expect(zone).toBeDefined();
     expect(zone!.lines[0].subpages![0].scrollSpeed).toBe(2);
     expect(zone!.lines[0].marginTop).toBe(1);
@@ -87,13 +86,13 @@ describe('Sports Caster Payload Generator', () => {
           { text: 'Wait: {next_wait}' },
           { text: 'Next: {next_booked_time}' },
         ] },
-        prep: { interval: 10, pages: [] },
+        
         game: { interval: 10, pages: [] },
       },
     });
 
-    expect(payload.display.pages[0].text).toBe('Wait: 5min');
-    expect(payload.display.pages[1].text).toBe('Next: 2:30PM');
+    expect(payload.blocks[0].pages[0].text).toBe('Wait: 5min');
+    expect(payload.blocks[0].pages[1].text).toBe('Next: 2:30PM');
   });
 
   it('hideIfEmpty skips page when variable is empty', () => {
@@ -103,13 +102,13 @@ describe('Sports Caster Payload Generator', () => {
           { text: 'Has data: {next_name}', hideIfEmpty: ['next_name'] },
           { text: 'Fallback page' },
         ] },
-        prep: { interval: 10, pages: [] },
+        
         game: { interval: 10, pages: [] },
       },
     });
 
-    expect(payload.display.pages.length).toBe(1);
-    expect(payload.display.pages[0].text).toBe('Fallback page');
+    expect(payload.blocks[0].pages.length).toBe(1);
+    expect(payload.blocks[0].pages[0].text).toBe('Fallback page');
   });
 
   it('showIfEmpty skips page when variable is not empty', () => {
@@ -120,13 +119,13 @@ describe('Sports Caster Payload Generator', () => {
           { text: 'No one waiting', showIfEmpty: ['next_name'] },
           { text: '{next_name} is next' },
         ] },
-        prep: { interval: 10, pages: [] },
+        
         game: { interval: 10, pages: [] },
       },
     });
 
-    expect(payload.display.pages.length).toBe(1);
-    expect(payload.display.pages[0].text).toBe('Alice is next');
+    expect(payload.blocks[0].pages.length).toBe(1);
+    expect(payload.blocks[0].pages[0].text).toBe('Alice is next');
   });
 
   it('showIfEmpty shows page when variable is empty', () => {
@@ -136,13 +135,13 @@ describe('Sports Caster Payload Generator', () => {
           { text: 'No one waiting', showIfEmpty: ['next_name'] },
           { text: 'Always shown' },
         ] },
-        prep: { interval: 10, pages: [] },
+        
         game: { interval: 10, pages: [] },
       },
     });
 
-    expect(payload.display.pages.length).toBe(2);
-    expect(payload.display.pages[0].text).toBe('No one waiting');
-    expect(payload.display.pages[1].text).toBe('Always shown');
+    expect(payload.blocks[0].pages.length).toBe(2);
+    expect(payload.blocks[0].pages[0].text).toBe('No one waiting');
+    expect(payload.blocks[0].pages[1].text).toBe('Always shown');
   });
 });

@@ -19,6 +19,7 @@ public:
   void setTimer(unsigned long remainingMs, unsigned long totalMs, unsigned long baseMs) { _timerRemainingAtBaseMs = remainingMs; _timerTotalMs = totalMs; _timerBaseMs = baseMs; }
   void setZones(const ZoneRenderInfo* zones, uint8_t count) override;
   void runDiagnosticSequence() override;
+  void playBootAnimation(unsigned long durationMs) override;
   void setOtaActive(bool active) override { _otaActive = active; if (active) _matrix->clearScreen(); }
 
 private:
@@ -63,15 +64,7 @@ private:
   int _fallbackScrollX;
   unsigned long _fallbackScrollTick;
 
-  // Boot splash
-  bool _splashActive = false;
-  int _ballX = 0, _ballY = 0;
-  float _ballAngle = 0;
-  int _ballOrbits = 0;
-  unsigned long _ballLastMove = 0;
-  unsigned long _splashStartTime = 0;
-  static constexpr int SPLASH_ORBITS = 2;
-  static constexpr int BALL_SIZE = 3;
+
 
   // OTA safety — suppress DMA during firmware updates
   volatile bool _otaActive = false;

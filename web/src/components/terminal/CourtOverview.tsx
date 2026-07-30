@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { phaseForElapsed, isActiveNow } from './CourtStatusCard';
-import { effectivePrepSec } from '@/lib/products-config-types';
+import { isActiveNow } from './CourtStatusCard';
+import { fetchBoardSnapshot } from '@/app/terminal/queue/actions';
 
 interface CourtState {
   id: string;
@@ -12,7 +12,7 @@ interface CourtState {
   elapsed: number;
   duration?: number;
   start_time?: string;
-}
+  }
 
 function formatTime(seconds: number): string {
   const m = Math.floor(seconds / 60);
@@ -20,7 +20,7 @@ function formatTime(seconds: number): string {
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
-function CourtOverviewItem({ court, prepTimeSec }: { court: CourtState; prepTimeSec: number }) {
+function CourtOverviewItem({ court }: { court: CourtState }) {
   const [now, setNow] = useState(Date.now());
 
   useEffect(() => {
@@ -29,19 +29,16 @@ function CourtOverviewItem({ court, prepTimeSec }: { court: CourtState; prepTime
     return () => clearInterval(id);
   }, [court.status, court.start_time]);
 
-  const isActive = isActiveNow(court, now);
-  const elapsed = isActive && court.start_time
-    ? Math.max(0, Math.floor((now - new Date(court.start_time).getTime()) / 1000))
-    : 0;
-
-  const effectivePrep = court.duration ? effectivePrepSec(court.duration, prepTimeSec) : prepTimeSec;
-  const phase = phaseForElapsed(elapsed, effectivePrep);
+  const isActive = court.status === 'In Progress';
+  const elapsed = court.start_time ? Math.floor((now - new Date(court.start_time).getTime()) / 1000) : 0;
+  const totalSec = court.duration ? court.duration * 60 : 0;
+  const remain = isActive ? Math.max(0, totalSec - elapsed) : 0;
 
   return (
-    <div className={`shrink-0 w-[140px] sm:w-auto rounded px-2 py-1.5 border ${isActive ? (phase === 'preparing' ? 'bg-zinc-900 border-amber-500/20' : 'bg-zinc-900 border-emerald-500/20') : 'bg-zinc-900/50 border-zinc-800'}`}>
+    <div className={`shrink-0 w-[140px] sm:w-auto rounded px-2 py-1.5 border ${isActive ? 'bg-zinc-900 border-emerald-500/20' : 'bg-zinc-900/50 border-zinc-800'}`}>
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1.5 overflow-hidden">
-          <span className={`size-1.5 shrink-0 rounded-full ${isActive ? (phase === 'preparing' ? 'bg-amber-400' : 'bg-emerald-400') : 'bg-zinc-600'}`} />
+          <span className={`size-1.5 shrink-0 rounded-full ${isActive ? 'bg-emerald-400' : 'bg-zinc-600'}`} />
           <span className="text-xs font-medium text-zinc-300 truncate">{court.name}</span>
         </div>
         {isActive && (
@@ -54,47 +51,26 @@ function CourtOverviewItem({ court, prepTimeSec }: { court: CourtState; prepTime
 
 export function CourtOverview() {
   const [courts, setCourts] = useState<CourtState[]>([]);
-  const [prepTimeSec, setPrepTimeSec] = useState(300);
   const supabase = createClient();
 
   async function fetchAll() {
-    const { data: settings } = await supabase.from('settings').select('key, value').eq('key', 'preparationTime').single();
-    if (settings) {
-      const v = parseInt(settings.value, 10);
-      if (!isNaN(v)) setPrepTimeSec(v);
-    }
-
-    const { data: courtsData } = await supabase
-      .from('courts')
-      .select('*')
-      .order('name', { ascending: true });
-    if (!courtsData) return;
-
-    const { data: games } = await supabase
-      .from('games')
-      .select('court_id, start_time, duration');
-
-    const now = Date.now();
-    const isActive = (g: any): boolean => {
-      if (!g || !g.start_time) return false;
-      const prep = effectivePrepSec(g.duration ?? 0, prepTimeSec);
-      const end = new Date(g.start_time).getTime() + prep * 1000 + (g.duration ?? 0) * 60_000;
-      return now < end;
-    };
-    setCourts(courtsData.map((c: any) => {
-      const game = (games ?? []).find((g: any) => g.court_id === c.id && isActive(g));
-      if (game && game.start_time) {
+    try {
+      const snap = await fetchBoardSnapshot();
+      const nowSec = Math.floor(Date.now() / 1000);
+      setCourts(snap.courts.map(c => {
+        const isPlayingNow = c.startTime > 0 && c.startTime <= nowSec;
         return {
           id: c.id,
           name: c.name,
-          status: 'In Progress',
-          elapsed: Math.floor((now - new Date(game.start_time).getTime()) / 1000),
-          duration: game.duration,
-          start_time: game.start_time,
-        };
-      }
-      return { id: c.id, name: c.name, status: 'Available', elapsed: 0 };
-    }));
+          status: isPlayingNow ? 'In Progress' : 'Available',
+          elapsed: isPlayingNow ? nowSec - c.startTime : 0,
+          duration: c.durationMin,
+          start_time: isPlayingNow ? new Date(c.startTime * 1000).toISOString() : undefined,
+          };
+      }));
+    } catch (e) {
+      console.error(e);
+    }
   }
 
   useEffect(() => {
@@ -118,14 +94,14 @@ export function CourtOverview() {
       es.close();
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [supabase]);
 
   return (
     <div className="h-full flex flex-col p-3 gap-1.5 bg-zinc-950">
       <h2 className="text-xs font-medium text-zinc-500 uppercase tracking-wider hidden sm:block">Courts</h2>
       <div className="flex sm:flex-col gap-2 sm:gap-1 overflow-x-auto sm:overflow-x-hidden sm:overflow-y-auto pb-1 sm:pb-0 no-scrollbar">
         {courts.map(c => (
-          <CourtOverviewItem key={c.id} court={c} prepTimeSec={prepTimeSec} />
+          <CourtOverviewItem key={c.id} court={c} />
         ))}
       </div>
     </div>
