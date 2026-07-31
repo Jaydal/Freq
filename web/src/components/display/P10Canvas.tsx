@@ -40,11 +40,13 @@ function getAvailableVRange(borderRows?: { start: number; end: number }[]): { to
   return { top: top >= 0 ? top : 0, bottom: bottom >= 0 ? bottom : PANEL_H - 1 };
 }
 
-export function textWidthPx(text: string, scale: number): number {
+export function textWidthPx(text: string, scale: number, font?: string, spacing: number = SPACING): number {
   let w = 0;
+  let first = true;
   for (const ch of text) {
-    if (w > 0) w += SPACING * scale;
-    w += ch === ' ' ? SPACING * scale : CHAR_W * scale;
+    if (!first) w += spacing * scale;
+    w += CHAR_W * scale;
+    first = false;
   }
   return w;
 }
@@ -73,18 +75,24 @@ function renderZoneDots(
   const avail = getAvailableVRange(zone.borderRows);
   const availH = avail.bottom - avail.top + 1;
 
-  const lineScales = zone.lines.map((line) => {
+  const lineScaleXs = zone.lines.map((line) => {
     if (zone.lines.length === 2) return 1;
-    if (zone.scale) return zone.scale;
+    if (zone.scaleX) return zone.scaleX;
     const sp = (line as any).subpages?.[0];
     if (sp && sp.effect === 'SCROLL') return 2;
     if (!sp) {
       if (line.effect === 'SCROLL') return 2;
-      const tw2x = textWidthPx(subst(line.text ?? '', mockVars).toUpperCase(), 2);
+      const firstSubpageFont = (line.subpages?.[0] as any)?.font;
+      const tw2x = textWidthPx(subst(line.text ?? '', mockVars).toUpperCase(), 2, firstSubpageFont, line.spacing ?? 1);
       return tw2x <= zoneWidth ? 2 : 1;
     }
-    const tw2x = textWidthPx(subst(sp.text, mockVars).toUpperCase(), 2);
+    const tw2x = textWidthPx(subst(sp.text, mockVars).toUpperCase(), 2, undefined, line.spacing ?? 1);
     return tw2x <= zoneWidth ? 2 : 1;
+  });
+  const lineScaleYs = zone.lines.map((_line, i) => {
+    if (zone.lines.length === 2) return 1;
+    if (zone.scaleY) return zone.scaleY;
+    return lineScaleXs[i]; // default: match X scale
   });
 
   let totalTextH = 0;
@@ -93,7 +101,7 @@ function renderZoneDots(
     const mt = zone.lines[li].marginTop ?? 0;
     const mb = zone.lines[li].marginBottom ?? (li < zone.lines.length - 1 ? 2 : 0);
     lineYOffsets.push(totalTextH + mt);
-    totalTextH += mt + CHAR_H * lineScales[li] + mb;
+    totalTextH += mt + CHAR_H * lineScaleYs[li] + mb;
   }
   const valign = zone.valign || 'middle';
   let startY: number;
@@ -108,8 +116,9 @@ function renderZoneDots(
   }
 
   zone.lines.forEach((line, li) => {
-    const scale = lineScales[li];
-
+    const scaleX = lineScaleXs[li];
+    const scaleY = lineScaleYs[li];
+    const scale = scaleX; // text width uses scaleX
     const subpages = (line as any).subpages;
     let displayText = '';
     let displayColor = '#00FF00';
@@ -117,6 +126,7 @@ function renderZoneDots(
     let displayEffect = 'STATIC';
     let displayAlign: 'left' | 'center' | 'right' = 'center';
     let displayScrollSpeed = 1;
+    let displayFont: string | undefined;
 
     if (subpages && subpages.length > 0) {
       const key = `${zoneIndex}-${li}`;
@@ -135,7 +145,9 @@ function renderZoneDots(
       }
       _spAccum[key]! += 50;
 
-      displayText = subst(sp.text, mockVars).toUpperCase();
+      displayFont = sp.font;
+      displayText = subst(sp.text, mockVars);
+      if (displayFont !== 'digital') displayText = displayText.toUpperCase();
       displayColor = sp.color || '#00FF00';
       displayBgColor = sp.bgColor || '';
       displayEffect = sp.effect || 'STATIC';
@@ -144,12 +156,13 @@ function renderZoneDots(
     } else {
       displayText = subst(line.text ?? '', mockVars).toUpperCase();
       displayColor = line.color || '#00FF00';
+      displayBgColor = line.bgColor || '';
       displayEffect = line.effect || 'STATIC';
       displayAlign = line.align || 'center';
       displayScrollSpeed = line.scrollSpeed ?? 1;
     }
 
-    const displayW = textWidthPx(displayText, scale);
+    const displayW = textWidthPx(displayText, scale, displayFont, line.spacing ?? 1);
     const textW = displayW;
 
     if (displayEffect === 'BLINK') {
@@ -175,18 +188,18 @@ function renderZoneDots(
 
     if (displayBgColor) {
       bgRects.push({
-        x: xOff,
+        x: zoneX,
         y: yOff,
-        w: textWidthPx(displayText, scale),
-        h: CHAR_H * scale,
+        w: zoneWidth,
+        h: CHAR_H * scaleY,
         color: displayBgColor,
       });
     }
 
-    const rawDots = textToDots(displayText, 0, 0);
+    const rawDots = textToDots(displayText, 0, 0, displayFont, scaleX, scaleY, line.spacing ?? 1);
     for (const d of rawDots) {
-      const px = xOff + d.x * scale;
-      const py = yOff + d.y * scale;
+      const px = xOff + d.x;
+      const py = yOff + d.y;
       if (px < zoneX || px >= zoneX + zoneWidth) continue;
       if (isBorderRow(py, zone.borderRows)) continue;
       dots.push({

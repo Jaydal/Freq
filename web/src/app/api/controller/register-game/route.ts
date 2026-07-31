@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { publishDisplay } from '@/lib/mqtt';
 import { generatePayload } from '@/lib/display/sports-caster';
+import { getBoardSnapshot } from '@/lib/queue/board-snapshot';
+import { publishBoardOnce } from '@/lib/queue/board-publisher';
 import { z } from 'zod';
 
 const schema = z.object({
@@ -59,16 +61,56 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: msg }, { status: 400 });
   }
 
-  // Non-critical: MQTT publish after the transaction commits
   const { data: court } = await supabase
     .from('courts').select('id, name').eq('name', courtName).single();
 
   if (court) {
-    const payload = generatePayload(court.id, {
-      current: { name: matchType, startTime: new Date().toISOString(), durationMinutes: duration },
-      upcoming: []
-    }, { courtName: court.name });
-    publishDisplay(court.id, payload).catch(() => {});
+    try {
+      const snapshot = await getBoardSnapshot(supabase);
+      const c = snapshot.courts.find(ct => ct.id === court.id);
+      if (c) {
+        let current = null;
+        if (c.startTime > 0) {
+          let name = c.matchTitle;
+          if (!name && c.players?.length) {
+            name = c.players.map(p => p.firstName).join(' & ') + ` - ${c.matchType}`;
+          }
+          if (!name) name = c.matchType;
+          
+          current = {
+            name,
+            startTime: new Date(c.startTime * 1000).toISOString(),
+            durationMinutes: c.durationMin,
+            matchTitle: c.matchTitle,
+            matchType: c.matchType,
+          };
+        }
+
+        const courtQueueCount = snapshot.queue.filter(q => !q.courtName || q.courtName === c.name).length;
+        const upcoming = snapshot.upcomingGames
+          .filter(g => g.id === c.id)
+          .map(g => ({
+            name: g.matchTitle,
+            durationMinutes: g.durationMin,
+            startTime: new Date(g.startTime * 1000).toISOString(),
+          }));
+
+        const { data: settings } = await supabase.from('settings').select('value').eq('key', 'displaySequence').single();
+        let displaySequence;
+        try { if (settings?.value) displaySequence = JSON.parse(settings.value); } catch {}
+
+        const payload = generatePayload(c.id, { current, upcoming }, {
+          courtName: c.name,
+          queueCount: courtQueueCount,
+          displaySequence,
+        });
+        
+        publishDisplay(c.id, payload).catch(() => {});
+      }
+      publishBoardOnce().catch(() => {});
+    } catch (e) {
+      console.error('Failed to publish display after register', e);
+    }
   }
 
   return NextResponse.json({ success: true, gameId });

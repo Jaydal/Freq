@@ -44,6 +44,9 @@ export interface BoardQueueRow {
   durationMin: number;
   estimatedWait: string;
   estimatedStartTime: number; // epoch seconds
+  simulatedCourtId?: string;
+  simulatedCourtName?: string;
+  bookedAt: number; // epoch seconds
 }
 
 /* Pricing/durations config (from the `settings` table) so the kiosk doesn't
@@ -56,6 +59,7 @@ export interface BoardConfig {
 export interface BoardSnapshot {
   config: BoardConfig;
   courts: BoardCourt[];
+  upcomingGames: BoardCourt[];
   nowServing: BoardNowServing;
   queue: BoardQueueRow[];
   serverTime: number;
@@ -85,33 +89,79 @@ export async function getBoardSnapshot(supabase: SupabaseClient): Promise<BoardS
     rates: durations.map((d) => priceMap[String(d)] ?? 0),
   };
 
-  const gameByCourt = new Map<string, any>();
-  (games ?? []).forEach((g: any) => { if (!gameByCourt.has(g.court_id)) gameByCourt.set(g.court_id, g); });
+  const gamesByCourt = new Map<string, any[]>();
+  (games ?? []).forEach((g: any) => {
+    if (!gamesByCourt.has(g.court_id)) gamesByCourt.set(g.court_id, []);
+    gamesByCourt.get(g.court_id)!.push(g);
+  });
 
   const courts: BoardCourt[] = (allCourts ?? []).map((c: any) => {
-    const game = gameByCourt.get(c.id);
-    if (game && game.start_time) {
-      const startMs = new Date(game.start_time).getTime();
-      const endMs = startMs + (game.duration ?? 0) * 60000;
-      if (Date.now() < endMs) {
-        return {
-          id: c.id,
-          name: c.name,
-          matchType: game.match_type ?? '',
-          matchTitle: game.match_title ?? '',
-          startTime: Math.floor(startMs / 1000),
-          durationMin: game.duration ?? 0,
-          players: (game.game_players ?? []).map((gp: any) => ({
-            firstName: gp.members?.first_name ?? '',
-            lastName: gp.members?.last_name ? gp.members.last_name.charAt(0) : '',
-          })),
-        };
+    const courtGames = gamesByCourt.get(c.id) || [];
+    let activeGame = null;
+
+    courtGames.sort((a, b) => {
+      const ta = a.start_time ? new Date(a.start_time).getTime() : 0;
+      const tb = b.start_time ? new Date(b.start_time).getTime() : 0;
+      return ta - tb;
+    });
+
+    for (const game of courtGames) {
+      if (game.start_time) {
+        const startMs = new Date(game.start_time).getTime();
+        const endMs = startMs + (game.duration ?? 0) * 60000;
+        if (Date.now() < endMs) {
+          activeGame = game;
+          break;
+        }
       }
+    }
+
+    if (activeGame && activeGame.start_time) {
+      const startMs = new Date(activeGame.start_time).getTime();
+      return {
+        id: c.id,
+        name: c.name,
+        matchType: activeGame.match_type ?? '',
+        matchTitle: activeGame.match_title ?? '',
+        startTime: Math.floor(startMs / 1000),
+        durationMin: activeGame.duration ?? 0,
+        players: (activeGame.game_players ?? []).map((gp: any) => ({
+          firstName: gp.members?.first_name ?? '',
+          lastName: gp.members?.last_name ? gp.members.last_name.charAt(0) : '',
+        })),
+      };
     }
     return {
       id: c.id, name: c.name, matchType: '', matchTitle: '',
       startTime: 0, durationMin: 0,  players: [],
     };
+  });
+
+  const upcomingGames: BoardCourt[] = [];
+  courts.forEach(c => {
+    const courtGames = gamesByCourt.get(c.id) || [];
+    for (const game of courtGames) {
+      if (game.start_time) {
+        const startMs = new Date(game.start_time).getTime();
+        const endMs = startMs + (game.duration ?? 0) * 60000;
+        if (Date.now() < endMs) {
+          if (c.startTime === Math.floor(startMs / 1000)) continue;
+          
+          upcomingGames.push({
+            id: c.id,
+            name: c.name,
+            matchType: game.match_type ?? '',
+            matchTitle: game.match_title ?? '',
+            startTime: Math.floor(startMs / 1000),
+            durationMin: game.duration ?? 0,
+            players: (game.game_players ?? []).map((gp: any) => ({
+              firstName: gp.members?.first_name ?? '',
+              lastName: gp.members?.last_name ? gp.members.last_name.charAt(0) : '',
+            })),
+          });
+        }
+      }
+    }
   });
 
   // Collect member names for waiting entries and the prioritized offer.
@@ -148,22 +198,30 @@ export async function getBoardSnapshot(supabase: SupabaseClient): Promise<BoardS
   // Initialize court free times for simulation
   const courtFreeTimes = courts.map(c => {
     if (c.startTime > 0) {
-      return c.startTime + (c.durationMin * 60) ;
+      return { id: c.id, name: c.name, time: c.startTime + (c.durationMin * 60) };
     }
-    return serverTime;
+    return { id: c.id, name: c.name, time: serverTime };
   });
 
   const queue: BoardQueueRow[] = (waiting ?? []).map((q: any, i: number) => {
     // Sort ascending so courtFreeTimes[0] is the earliest available court
-    courtFreeTimes.sort((a, b) => a - b);
+    courtFreeTimes.sort((a, b) => a.time - b.time);
     
-    let estStart = courtFreeTimes[0];
+    // If the entry requires a specific court, find it
+    let targetCourtIdx = 0;
+    if (q.court_id) {
+      const idx = courtFreeTimes.findIndex(c => c.id === q.court_id);
+      if (idx !== -1) targetCourtIdx = idx;
+    }
+
+    const targetCourt = courtFreeTimes[targetCourtIdx];
+    let estStart = targetCourt.time;
     // If the earliest court is in the past, they start now
     if (estStart < serverTime) estStart = serverTime;
 
     // Simulate this queue entry taking that court
     const duration = q.duration ?? 30; // fallback to 30 mins
-    courtFreeTimes[0] = estStart + (duration * 60) ;
+    targetCourt.time = estStart + (duration * 60);
 
     return {
       id: q.id,
@@ -178,10 +236,13 @@ export async function getBoardSnapshot(supabase: SupabaseClient): Promise<BoardS
       durationMin: q.duration ?? 0,
       estimatedWait: getEstimatedWait(i + 1),
       estimatedStartTime: estStart,
+      simulatedCourtId: targetCourt.id,
+      simulatedCourtName: targetCourt.name,
+      bookedAt: q.created_at ? Math.floor(new Date(q.created_at).getTime() / 1000) : serverTime,
     };
   });
   // effectivePrepSec is applied per-court on the client using durationMin; we
   // pass the raw configured prepTimeSec so the kiosk applies the same rule.
 
-  return { config, courts, nowServing, queue, serverTime };
+  return { config, courts, upcomingGames, nowServing, queue, serverTime };
 }

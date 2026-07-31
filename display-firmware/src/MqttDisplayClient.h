@@ -16,12 +16,19 @@ struct SubPage {
   std::string align;
   float scrollSpeed;
   uint16_t durationMs;
+  std::string font;
 };
 
 struct ZoneLine {
   std::vector<SubPage> subpages;
   uint8_t marginTop;
   uint8_t marginBottom;
+  std::string font;
+  uint8_t scaleX;
+  uint8_t scaleY;
+  uint8_t spacing;
+  LineRule rules[3];
+  uint8_t ruleCount = 0;
 };
 
 struct DisplayZone {
@@ -30,7 +37,8 @@ struct DisplayZone {
   ZoneLine lines[2];
   uint8_t lineCount;
   uint8_t borderCount;
-  uint8_t scale;
+  uint8_t scaleX;
+  uint8_t scaleY;
   std::string valign;
   BorderRange borderRanges[4];
 };

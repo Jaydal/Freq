@@ -28,8 +28,9 @@ function formatTime(seconds: number): string {
 // (start_time + duration) has not yet ended.
 export function isActiveNow(court: CourtStatusData, nowMs = Date.now()): boolean {
   if (!court.start_time) return false;
-  const end = new Date(court.start_time).getTime() + (court.duration ?? 0) * 60_000;
-  return nowMs < end;
+  const start = new Date(court.start_time).getTime();
+  const end = start + (court.duration ?? 0) * 60_000;
+  return nowMs >= start && nowMs < end;
 }
 
 export function CourtStatusCard({ court }: Props) {
@@ -82,6 +83,15 @@ export function CourtStatusCard({ court }: Props) {
             </div>
             <div className="flex gap-3 mt-2 text-[11px] text-zinc-500 tabular-nums">
               <span>Elapsed {formatTime(elapsed)}</span>
+              {court.start_time && court.duration && (
+                <span>
+                  • Schedule: {
+                    new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: 'numeric', hour12: true }).format(new Date(court.start_time))
+                  } - {
+                    new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: 'numeric', hour12: true }).format(new Date(new Date(court.start_time).getTime() + court.duration * 60_000))
+                  }
+                </span>
+              )}
             </div>
           </div>
           {court.players && court.players.length > 0 && (

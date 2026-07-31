@@ -8,6 +8,7 @@ export interface DisplayPage {
   effect?: 'SCROLL' | 'STATIC' | 'BLINK' | 'paginate';
   durationSeconds?: number;
   shrink?: boolean;
+  font?: string;
 }
 
 export interface P10DisplayProps {
@@ -60,54 +61,77 @@ export const FONT: Record<string, number[]> = {
   '\u00A0': [0b00000, 0b00000, 0b00000, 0b00000, 0b00000, 0b00000, 0b00000],
 };
 
+export const FONT_DIGITAL: Record<string, number[]> = {
+  '0': [0x1F, 0x11, 0x11, 0x11, 0x11, 0x11, 0x1F],
+  '1': [0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01],
+  '2': [0x1F, 0x01, 0x01, 0x1F, 0x10, 0x10, 0x1F],
+  '3': [0x1F, 0x01, 0x01, 0x1F, 0x01, 0x01, 0x1F],
+  '4': [0x11, 0x11, 0x11, 0x1F, 0x01, 0x01, 0x01],
+  '5': [0x1F, 0x10, 0x10, 0x1F, 0x01, 0x01, 0x1F],
+  '6': [0x1F, 0x10, 0x10, 0x1F, 0x11, 0x11, 0x1F],
+  '7': [0x1F, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01],
+  '8': [0x1F, 0x11, 0x11, 0x1F, 0x11, 0x11, 0x1F],
+  '9': [0x1F, 0x11, 0x11, 0x1F, 0x01, 0x01, 0x1F],
+  ':': [0x00, 0x0C, 0x0C, 0x00, 0x0C, 0x0C, 0x00],
+  ' ': [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00],
+  '-': [0x00, 0x00, 0x00, 0x1F, 0x00, 0x00, 0x00],
+};
+
 export const CHAR_W = 5;
 export const CHAR_H = 7;
 export const SPACING = 1;
 export const CELL_W = CHAR_W + SPACING;
 
-function textWidth(text: string): number {
+export function textWidth(text: string, font?: string) {
   let w = 0;
   let first = true;
   for (const ch of text) {
     if (!first) w += SPACING;
-    w += ch === ' ' ? SPACING : CHAR_W;
+    w += CHAR_W;
     first = false;
   }
   return w;
 }
 
-export function textToDots(text: string, offsetX = 0, offsetY = 0): { x: number; y: number }[] {
+export function textToDots(text: string, offsetX = 0, offsetY = 0, font?: string, scaleX = 1, scaleY = 1, spacing = SPACING): { x: number; y: number }[] {
   const dots: { x: number; y: number }[] = [];
   let cursor = offsetX;
   for (const ch of text) {
-    if (ch === ' ') {
-      cursor += SPACING;
+    if (ch === ' ' && font !== 'digital') {
+      cursor += CHAR_W * scaleX + spacing * scaleX;
       continue;
     }
-    const rows = getChar(ch);
-    if (!rows) { cursor += SPACING; continue; }
+    const rows = getChar(ch, font);
+    if (!rows) { cursor += spacing * scaleX; continue; }
     for (let row = 0; row < CHAR_H; row++) {
       for (let col = 0; col < CHAR_W; col++) {
         if (rows[row] & (1 << (CHAR_W - 1 - col))) {
-          dots.push({ x: cursor + col, y: offsetY + row });
+          for (let dy = 0; dy < scaleY; dy++) {
+            for (let dx = 0; dx < scaleX; dx++) {
+              dots.push({ x: cursor + col * scaleX + dx, y: offsetY + row * scaleY + dy });
+            }
+          }
         }
       }
     }
-    cursor += CELL_W;
+    cursor += (CHAR_W + spacing) * scaleX;
   }
   return dots;
 }
 
-export function getChar(ch: string): number[] | undefined {
-  const u = ch.toUpperCase();
-  return FONT[u] ?? (ch === '\u00A0' ? FONT[' '] : undefined);
+export function getChar(ch: string, font?: string) {
+  if (font === 'digital') {
+    return FONT_DIGITAL[ch] || FONT_DIGITAL[' '];
+  }
+  return FONT[ch.toUpperCase()] || FONT[' '];
 }
 
-type LineDots = { dots: { x: number; y: number }[]; width: number; text: string; color: string; effect: string };
+type LineDots = { dots: { x: number; y: number }[]; width: number; text: string; color: string; effect: string; font?: string };
 
 function renderPage(page: DisplayPage, panelWidth: number): LineDots {
-  const s = page.text || '';
-  const w = textWidth(s);
+  let s = page.text || '';
+  if (page.font !== 'digital') s = s.toUpperCase();
+  const w = textWidth(s, page.font);
   const isStatic = page.effect === 'STATIC' && w <= panelWidth;
   const xOff = isStatic ? Math.floor((panelWidth - w) / 2) : 0;
 
@@ -116,7 +140,8 @@ function renderPage(page: DisplayPage, panelWidth: number): LineDots {
     width: w,
     color: page.color || '#00FF00',
     effect: page.effect || 'SCROLL',
-    dots: textToDots(s.toUpperCase(), xOff, 0),
+    dots: textToDots(s, xOff, 0, page.font),
+    font: page.font
   };
 }
 
@@ -129,7 +154,7 @@ function PageGroup({ line, panelWidth }: { line: LineDots; panelWidth: number })
       {line.dots.map((d, i) => (
         <circle key={i} cx={d.x + 0.5} cy={d.y + 0.5} r={0.4} fill={line.color} opacity={0.95} />
       ))}
-      {overflows && textToDots(line.text, line.width + panelWidth + 4, 0).map((d, i) => (
+      {overflows && textToDots(line.text, line.width + panelWidth + 4, 0, line.font).map((d, i) => (
         <circle key={`dup-${i}`} cx={d.x + 0.5} cy={d.y + 0.5} r={0.4} fill={line.color} opacity={0.95} />
       ))}
     </>

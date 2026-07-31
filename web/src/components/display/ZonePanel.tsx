@@ -1,10 +1,11 @@
 'use client';
 
+import { useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
-import type { DisplayZone, SubPage } from './zone-types';
+import type { DisplayZone, SubPage, DisplayLineRule } from './zone-types';
 
 const VARIABLES = [
   '{court_name}', '{match_title}', '{match_type}', '{duration}',
@@ -170,30 +171,52 @@ export function ZonePanel({ zone, zoneIndex, onChange, onDelete }: Props) {
         )}
       </div>
 
-      <div className="space-y-1.5">
-        <Label className="text-xs text-zinc-500">Text Size</Label>
-        <div className="flex items-center gap-2">
-          <Input
-            type="number" min={1} max={9}
-            value={zone.scale ?? ''}
-            onChange={e => {
-              const v = e.target.value;
-              onChange({ ...zone, scale: v ? Math.max(1, Math.min(9, Number(v))) : undefined });
-            }}
-            placeholder="Auto"
-            className="w-16 h-7 text-xs bg-zinc-950 border-zinc-700 text-zinc-200"
-          />
-          {!zone.scale && (
-            <span className="text-xs text-zinc-600">Auto</span>
-          )}
-          {zone.scale && (
-            <button
-              onClick={() => onChange({ ...zone, scale: undefined })}
-              className="text-xs text-zinc-500 hover:text-zinc-300"
-            >
-              Clear
-            </button>
-          )}
+      <div className="flex gap-4">
+        <div className="space-y-1.5 flex-1">
+          <Label className="text-xs text-zinc-500">Scale X (Width)</Label>
+          <div className="flex items-center gap-2">
+            <Input
+              type="number" min={1} max={9}
+              value={zone.scaleX ?? ''}
+              onChange={e => {
+                const v = e.target.value;
+                onChange({ ...zone, scaleX: v ? Math.max(1, Math.min(9, Number(v))) : undefined });
+              }}
+              placeholder="Auto"
+              className="h-7 text-xs bg-zinc-950 border-zinc-700 text-zinc-200"
+            />
+            {zone.scaleX && (
+              <button
+                onClick={() => onChange({ ...zone, scaleX: undefined })}
+                className="text-xs text-zinc-500 hover:text-zinc-300 shrink-0"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+        </div>
+        <div className="space-y-1.5 flex-1">
+          <Label className="text-xs text-zinc-500">Scale Y (Height)</Label>
+          <div className="flex items-center gap-2">
+            <Input
+              type="number" min={1} max={9}
+              value={zone.scaleY ?? ''}
+              onChange={e => {
+                const v = e.target.value;
+                onChange({ ...zone, scaleY: v ? Math.max(1, Math.min(9, Number(v))) : undefined });
+              }}
+              placeholder="Auto"
+              className="h-7 text-xs bg-zinc-950 border-zinc-700 text-zinc-200"
+            />
+            {zone.scaleY && (
+              <button
+                onClick={() => onChange({ ...zone, scaleY: undefined })}
+                className="text-xs text-zinc-500 hover:text-zinc-300 shrink-0"
+              >
+                Clear
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -274,6 +297,24 @@ export function ZonePanel({ zone, zoneIndex, onChange, onDelete }: Props) {
 
               <div className="flex gap-2 items-center">
                 <div className="space-y-1 flex-1">
+                  <Label className="text-xs text-zinc-500">Font</Label>
+                  <Select value={sp.font ?? 'default'}
+                    onValueChange={v => {
+                      const subs = [...(zone.lines[li].subpages ?? [])];
+                      subs[spi] = { ...subs[spi], font: (v === 'default' || !v) ? undefined : v };
+                      updateLine(li, subs);
+                    }}
+                  >
+                    <SelectTrigger className="h-7 text-xs bg-zinc-950 border-zinc-700 text-zinc-200">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="default">Default 5x7</SelectItem>
+                      <SelectItem value="digital">7-Segment Digital</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1 flex-1">
                   <Label className="text-xs text-zinc-500">Effect</Label>
                   <Select value={sp.effect}
                     onValueChange={v => {
@@ -344,25 +385,27 @@ export function ZonePanel({ zone, zoneIndex, onChange, onDelete }: Props) {
                 </div>
               )}
 
-              <div className="space-y-1">
-                <Label className="text-xs text-zinc-500">H Align</Label>
-                <div className="flex gap-1">
-                  {(['left', 'center', 'right'] as const).map(a => (
-                    <button key={a}
-                      onClick={() => {
-                        const subs = [...(zone.lines[li].subpages ?? [])];
-                        subs[spi] = { ...subs[spi], align: a };
-                        updateLine(li, subs);
-                      }}
-                      className={`px-2 py-1 text-xs rounded font-medium transition-colors ${
-                        (sp.align || 'center') === a ? 'bg-zinc-700 text-white' : 'bg-zinc-800 text-zinc-500 hover:text-zinc-300'
-                      }`}
-                    >
-                      {a.charAt(0).toUpperCase() + a.slice(1)}
-                    </button>
-                  ))}
+              {sp.effect !== 'SCROLL' && (
+                <div className="space-y-1">
+                  <Label className="text-xs text-zinc-500">H Align</Label>
+                  <div className="flex gap-1">
+                    {(['left', 'center', 'right'] as const).map(a => (
+                      <button key={a}
+                        onClick={() => {
+                          const subs = [...(zone.lines[li].subpages ?? [])];
+                          subs[spi] = { ...subs[spi], align: a };
+                          updateLine(li, subs);
+                        }}
+                        className={`px-2 py-1 text-xs rounded font-medium transition-colors ${
+                          (sp.align || 'center') === a ? 'bg-zinc-700 text-white' : 'bg-zinc-800 text-zinc-500 hover:text-zinc-300'
+                        }`}
+                      >
+                        {a.charAt(0).toUpperCase() + a.slice(1)}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           ))}
           <Button variant="outline" size="sm" onClick={() => {
@@ -371,32 +414,249 @@ export function ZonePanel({ zone, zoneIndex, onChange, onDelete }: Props) {
             + Add Sub-page
           </Button>
 
-          <div className="space-y-1">
-            <Label className="text-xs text-zinc-500">Margins (top / bottom)</Label>
-            <div className="flex items-center gap-2">
+          <div className="flex gap-4">
+            <div className="space-y-1">
+              <Label className="text-xs text-zinc-500">Margins (top / bottom)</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="number" min={0} max={16}
+                  value={line.marginTop ?? 0}
+                  onChange={e => {
+                    const lines = zone.lines.map((l, i) =>
+                      i === li ? { ...l, marginTop: Math.max(0, Math.min(16, Number(e.target.value))) } : l
+                    );
+                    onChange({ ...zone, lines });
+                  }}
+                  className="w-14 h-7 text-xs bg-zinc-950 border-zinc-700 text-zinc-200"
+                />
+                <span className="text-xs text-zinc-600">/</span>
+                <Input
+                  type="number" min={0} max={16}
+                  value={line.marginBottom ?? (li < zone.lines.length - 1 ? 2 : 0)}
+                  onChange={e => {
+                    const lines = zone.lines.map((l, i) =>
+                      i === li ? { ...l, marginBottom: Math.max(0, Math.min(16, Number(e.target.value))) } : l
+                    );
+                    onChange({ ...zone, lines });
+                  }}
+                  className="w-14 h-7 text-xs bg-zinc-950 border-zinc-700 text-zinc-200"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-xs text-zinc-500">Font Size (W / H)</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="number" min={1} max={4}
+                  value={line.scaleX ?? zone.scaleX ?? (zone.lines.length === 2 ? 1 : 2)}
+                  onChange={e => {
+                    const lines = zone.lines.map((l, i) =>
+                      i === li ? { ...l, scaleX: Math.max(1, Math.min(4, Number(e.target.value))) } : l
+                    );
+                    onChange({ ...zone, lines });
+                  }}
+                  className="w-14 h-7 text-xs bg-zinc-950 border-zinc-700 text-zinc-200"
+                />
+                <span className="text-xs text-zinc-600">x</span>
+                <Input
+                  type="number" min={1} max={4}
+                  value={line.scaleY ?? zone.scaleY ?? (zone.lines.length === 2 ? 1 : 2)}
+                  onChange={e => {
+                    const lines = zone.lines.map((l, i) =>
+                      i === li ? { ...l, scaleY: Math.max(1, Math.min(4, Number(e.target.value))) } : l
+                    );
+                    onChange({ ...zone, lines });
+                  }}
+                  className="w-14 h-7 text-xs bg-zinc-950 border-zinc-700 text-zinc-200"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-xs text-zinc-500">Char Spacing</Label>
               <Input
-                type="number" min={0} max={16}
-                value={line.marginTop ?? 0}
+                type="number" min={0} max={10}
+                value={line.spacing ?? 1}
                 onChange={e => {
                   const lines = zone.lines.map((l, i) =>
-                    i === li ? { ...l, marginTop: Math.max(0, Math.min(16, Number(e.target.value))) } : l
+                    i === li ? { ...l, spacing: Math.max(0, Math.min(10, Number(e.target.value))) } : l
                   );
                   onChange({ ...zone, lines });
                 }}
-                className="w-14 h-7 text-xs bg-zinc-950 border-zinc-700 text-zinc-200"
+                className="w-16 h-7 text-xs bg-zinc-950 border-zinc-700 text-zinc-200"
               />
-              <span className="text-xs text-zinc-600">/</span>
-              <Input
-                type="number" min={0} max={16}
-                value={line.marginBottom ?? (li < zone.lines.length - 1 ? 2 : 0)}
-                onChange={e => {
-                  const lines = zone.lines.map((l, i) =>
-                    i === li ? { ...l, marginBottom: Math.max(0, Math.min(16, Number(e.target.value))) } : l
-                  );
-                  onChange({ ...zone, lines });
+            </div>
+          </div>
+          
+          <div className="space-y-2 mt-4 border-t border-zinc-800 pt-3">
+            <div className="flex items-center justify-between">
+              <Label className="text-xs text-zinc-400 font-semibold">Conditional Actions</Label>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-6 px-2 text-[10px] bg-zinc-900 border-zinc-700 hover:bg-zinc-800"
+                onClick={() => {
+                  const currentRules = line.rules || [];
+                  const newRule: DisplayLineRule = { type: 'time_remaining', operator: '<', value: 60, effect: 'BLINK_FAST' };
+                  const newLines = zone.lines.map((l, i) => i === li ? { ...l, rules: [...currentRules, newRule] } : l);
+                  onChange({ ...zone, lines: newLines });
                 }}
-                className="w-14 h-7 text-xs bg-zinc-950 border-zinc-700 text-zinc-200"
-              />
+              >
+                + Add Rule
+              </Button>
+            </div>
+            
+            <div className="space-y-2">
+              {(line.rules || []).map((rule, ri) => (
+                <div key={ri} className="flex flex-wrap items-center gap-2 p-2 bg-zinc-900/50 border border-zinc-800 rounded-md">
+                  <div className="flex items-center gap-2 w-full sm:w-auto">
+                    <span className="text-[10px] text-zinc-500 uppercase font-bold shrink-0">If</span>
+                    <Select
+                      value={rule.type}
+                      onValueChange={(val: any) => {
+                        const newRules = [...(line.rules || [])];
+                        newRules[ri] = { ...newRules[ri], type: val };
+                        onChange({ ...zone, lines: zone.lines.map((l, i) => i === li ? { ...l, rules: newRules } : l) });
+                      }}
+                    >
+                      <SelectTrigger className="h-7 text-xs bg-zinc-950 border-zinc-700 w-32"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="time_remaining">Time Left (sec)</SelectItem>
+                        <SelectItem value="time_remaining_min">Time Left (min)</SelectItem>
+                        <SelectItem value="time_remaining_pct">Time Left (%)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <Select
+                      value={rule.operator}
+                      onValueChange={(val: any) => {
+                        if (!['<', '>', '<=', '>=', '=='].includes(val)) return;
+                        const newRules = [...(line.rules || [])];
+                        newRules[ri] = { ...newRules[ri], operator: val as '<' | '>' | '<=' | '>=' | '==' };
+                        onChange({ ...zone, lines: zone.lines.map((l, i) => i === li ? { ...l, rules: newRules } : l) });
+                      }}
+                    >
+                      <SelectTrigger className="h-7 text-xs bg-zinc-950 border-zinc-700 w-16"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="<">{'<'}</SelectItem>
+                        <SelectItem value=">">{'>'}</SelectItem>
+                        <SelectItem value="<=">{'<='}</SelectItem>
+                        <SelectItem value=">=">{'>='}</SelectItem>
+                        <SelectItem value="==">{'=='}</SelectItem>
+                      </SelectContent>
+                    </Select>
+
+                    <Input
+                      type="number"
+                      value={rule.value}
+                      onChange={e => {
+                        const newRules = [...(line.rules || [])];
+                        newRules[ri] = { ...newRules[ri], value: parseInt(e.target.value) || 0 };
+                        onChange({ ...zone, lines: zone.lines.map((l, i) => i === li ? { ...l, rules: newRules } : l) });
+                      }}
+                      className="w-16 h-7 text-xs bg-zinc-950 border-zinc-700 text-center"
+                    />
+                  </div>
+
+                  <div className="w-full sm:w-px sm:h-5 bg-zinc-800 my-1 sm:my-0"></div>
+                  
+                  <div className="flex flex-1 items-center flex-wrap gap-2 pr-6 relative">
+                    <span className="text-[10px] text-zinc-500 uppercase font-bold shrink-0">Then</span>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <Label className="text-[10px] text-zinc-500 shrink-0">Color:</Label>
+                      <div className="flex items-center gap-1 bg-zinc-950 border border-zinc-700 rounded px-1 h-7">
+                        <input
+                          type="color"
+                          value={rule.color || '#00FF00'}
+                          onChange={e => {
+                            const newRules = [...(line.rules || [])];
+                            newRules[ri] = { ...newRules[ri], color: e.target.value };
+                            onChange({ ...zone, lines: zone.lines.map((l, i) => i === li ? { ...l, rules: newRules } : l) });
+                          }}
+                          className={`w-5 h-5 rounded cursor-pointer border-0 p-0 bg-transparent ${!rule.color ? 'opacity-30 grayscale' : ''}`}
+                          title="Override Color"
+                        />
+                        <button
+                          onClick={() => {
+                            const newRules = [...(line.rules || [])];
+                            delete newRules[ri].color;
+                            onChange({ ...zone, lines: zone.lines.map((l, i) => i === li ? { ...l, rules: newRules } : l) });
+                          }}
+                          className={`text-[10px] px-1 hover:text-red-400 transition-colors ${rule.color ? 'text-zinc-400' : 'text-zinc-700'}`}
+                          title="Remove Color Override"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center gap-1 min-w-[120px] flex-1">
+                      <Label className="text-[10px] text-zinc-500 shrink-0">Effect:</Label>
+                      <Select
+                        value={rule.effect || 'none'}
+                        onValueChange={(val: any) => {
+                          const newRules = [...(line.rules || [])];
+                          if (val === 'none') delete newRules[ri].effect;
+                          else newRules[ri] = { ...newRules[ri], effect: val };
+                          onChange({ ...zone, lines: zone.lines.map((l, i) => i === li ? { ...l, rules: newRules } : l) });
+                        }}
+                      >
+                        <SelectTrigger className="h-7 text-xs bg-zinc-950 border-zinc-700 w-full"><SelectValue placeholder="No change" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">No change</SelectItem>
+                          <SelectItem value="STATIC">Static</SelectItem>
+                          <SelectItem value="SCROLL">Scroll</SelectItem>
+                          <SelectItem value="BLINK">Blink</SelectItem>
+                          <SelectItem value="BLINK_FAST">Blink Fast</SelectItem>
+                          <SelectItem value="BLINK_SLOW">Blink Slow</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="flex items-center gap-1 min-w-[110px] flex-1">
+                      <Label className="text-[10px] text-zinc-500 shrink-0">Align:</Label>
+                      <Select
+                        value={rule.align || 'none'}
+                        onValueChange={(val: any) => {
+                          const newRules = [...(line.rules || [])];
+                          if (val === 'none') delete newRules[ri].align;
+                          else newRules[ri] = { ...newRules[ri], align: val };
+                          onChange({ ...zone, lines: zone.lines.map((l, i) => i === li ? { ...l, rules: newRules } : l) });
+                        }}
+                      >
+                        <SelectTrigger className="h-7 text-xs bg-zinc-950 border-zinc-700 w-full"><SelectValue placeholder="No change" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">No change</SelectItem>
+                          <SelectItem value="left">Left</SelectItem>
+                          <SelectItem value="center">Center</SelectItem>
+                          <SelectItem value="right">Right</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <button
+                      onClick={() => {
+                        const newRules = [...(line.rules || [])];
+                        newRules.splice(ri, 1);
+                        onChange({ ...zone, lines: zone.lines.map((l, i) => i === li ? { ...l, rules: newRules.length > 0 ? newRules : undefined } : l) });
+                      }}
+                      className="absolute right-0 top-0 bottom-0 my-auto w-6 h-6 flex items-center justify-center text-zinc-500 hover:text-red-400 hover:bg-zinc-800 rounded transition-colors"
+                      title="Remove rule"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                </div>
+              ))}
+              
+              {(!line.rules || line.rules.length === 0) && (
+                <div className="text-center py-4 border border-dashed border-zinc-800 rounded-md bg-zinc-950/30 text-zinc-600 text-xs">
+                  No conditional actions added.
+                </div>
+              )}
             </div>
           </div>
         </div>

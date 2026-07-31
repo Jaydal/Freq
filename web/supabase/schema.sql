@@ -135,6 +135,9 @@ DECLARE
   v_total   NUMERIC(10,2) := 0;
   v_p       JSONB;
   v_charge  NUMERIC(10,2);
+  v_start_time  TIMESTAMPTZ;
+  v_status      TEXT;
+  v_latest_end  TIMESTAMPTZ;
 BEGIN
   SELECT * INTO v_court FROM courts WHERE name = p_court_name;
   IF NOT FOUND THEN RAISE EXCEPTION 'Court not found'; END IF;
@@ -150,9 +153,22 @@ BEGIN
     v_total := v_total + v_charge;
   END LOOP;
 
+  -- Calculate start_time and status based on existing games
+  SELECT MAX(start_time + (duration * interval '1 minute')) INTO v_latest_end
+  FROM games
+  WHERE court_id = v_court.id AND status IN ('In Progress', 'Scheduled');
+
+  IF v_latest_end IS NULL OR v_latest_end <= NOW() THEN
+    v_start_time := NOW();
+    v_status := 'In Progress';
+  ELSE
+    v_start_time := v_latest_end;
+    v_status := 'Scheduled';
+  END IF;
+
   -- Create game (fails fast if DB error — no money moved yet)
   INSERT INTO games (court_id, match_type, duration, status, start_time, charge_amount)
-  VALUES (v_court.id, p_match_type, p_duration, 'In Progress', NOW(), v_total)
+  VALUES (v_court.id, p_match_type, p_duration, v_status, v_start_time, v_total)
   RETURNING id INTO v_game_id;
 
   -- Debit wallets and register players
@@ -173,7 +189,9 @@ BEGIN
     VALUES (v_game_id, v_member.id, v_card.id, v_p->>'team');
   END LOOP;
 
-  UPDATE courts SET status = 'In Game', last_activity = NOW() WHERE id = v_court.id;
+  IF v_status = 'In Progress' THEN
+    UPDATE courts SET status = 'In Game', last_activity = NOW() WHERE id = v_court.id;
+  END IF;
 
   RETURN v_game_id;
 END;

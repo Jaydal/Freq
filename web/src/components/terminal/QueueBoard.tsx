@@ -23,6 +23,8 @@ export function QueueBoard() {
 
   useEffect(() => {
     fetchInitial();
+    const intervalId = setInterval(fetchInitial, 10000);
+    return () => clearInterval(intervalId);
   }, [fetchInitial]);
 
   useEffect(() => {
@@ -81,6 +83,7 @@ export function QueueBoard() {
     duration: q.durationMin,
     estimatedWait: q.estimatedWait,
     estimatedStartTime: q.estimatedStartTime * 1000,
+    bookedAt: q.bookedAt * 1000,
   }));
 
   return (

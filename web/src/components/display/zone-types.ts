@@ -1,3 +1,12 @@
+export interface DisplayLineRule {
+  type: 'time_remaining' | 'time_remaining_min' | 'time_remaining_pct';
+  operator: '<' | '>' | '<=' | '>=' | '==';
+  value: number;
+  color?: string;
+  effect?: 'SCROLL' | 'STATIC' | 'BLINK' | 'BLINK_FAST' | 'BLINK_SLOW';
+  align?: 'left' | 'center' | 'right';
+}
+
 export interface SubPage {
   text: string;
   effect: 'SCROLL' | 'STATIC' | 'BLINK';
@@ -13,12 +22,17 @@ export interface DisplayLine {
   subpages?: SubPage[];
   text?: string;
   color?: string;
+  bgColor?: string;
+  font?: string;
   effect?: 'SCROLL' | 'STATIC' | 'BLINK' | 'paginate';
   align?: 'left' | 'center' | 'right';
   scrollSpeed?: number;
   marginTop?: number;
   marginBottom?: number;
-  font?: string;
+  scaleX?: number;
+  scaleY?: number;
+  spacing?: number;
+  rules?: DisplayLineRule[];
 }
 
 export interface DisplayZone {
@@ -26,7 +40,8 @@ export interface DisplayZone {
   panelEnd: number;
   lines: DisplayLine[];
   borderRows?: { start: number; end: number }[];
-  scale?: number;
+  scaleX?: number;
+  scaleY?: number;
   valign?: 'top' | 'middle' | 'bottom';
 }
 

@@ -10,17 +10,15 @@ interface Props {
   matchTypes: string[];
   durations: number[];
   rates: Record<string, number>;
-  prepTimeSec: number;
 }
 
 const ALL_MATCH_TYPES = ['1v1', '2v2'];
 
-export function ProductsEditor({ matchTypes, durations, rates, prepTimeSec }: Props) {
+export function ProductsEditor({ matchTypes, durations, rates }: Props) {
   const [enabledTypes, setEnabledTypes] = useState<string[]>(matchTypes);
   const [rows, setRows] = useState(() =>
     durations.map(d => ({ duration: d, rate: rates[String(d)] ?? 0 }))
   );
-  const [prep, setPrep] = useState(String(prepTimeSec));
   const [saving, setSaving] = useState(false);
 
   const toggleType = (t: string) => {
@@ -60,7 +58,6 @@ export function ProductsEditor({ matchTypes, durations, rates, prepTimeSec }: Pr
     fd.set('matchTypes', enabledTypes.join(','));
     fd.set('durations', rows.map(r => r.duration).join(','));
     fd.set('rates', JSON.stringify(buildRateMap()));
-    fd.set('prepTime', prep);
     await saveProducts(fd);
     setSaving(false);
   }
@@ -125,14 +122,7 @@ export function ProductsEditor({ matchTypes, durations, rates, prepTimeSec }: Pr
         </div>
       </div>
 
-      {/* Preparation Time */}
-      <div>
-        <label className="text-sm font-medium text-zinc-300 block mb-1">Preparation Time (seconds)</label>
-        <Input type="number" min={0} max={3600} value={prep}
-          onChange={e => setPrep(e.target.value)}
-          className="w-32" />
-        <p className="text-xs text-zinc-500 mt-1">Time between booking and game start when a court is immediately available.</p>
-      </div>
+
 
       <Button onClick={handleSave} disabled={saving}>
         {saving ? 'Saving...' : 'Save'}

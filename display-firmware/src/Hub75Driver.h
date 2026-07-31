@@ -16,7 +16,13 @@ public:
   void setColorRGB(uint8_t r, uint8_t g, uint8_t b) override;
   void setScrollSpeed(uint16_t msPerPixel) override;
   void setAnimationMode(const char* mode) override;
-  void setTimer(unsigned long remainingMs, unsigned long totalMs, unsigned long baseMs) { _timerRemainingAtBaseMs = remainingMs; _timerTotalMs = totalMs; _timerBaseMs = baseMs; }
+  void setTimer(unsigned long remainingMs, unsigned long totalMs, unsigned long baseMs) {
+    _timerRemainingAtBaseMs = remainingMs;
+    _timerTotalMs = totalMs;
+    _timerBaseMs = baseMs;
+    _timerActive = true;
+  }
+  void clearTimer() { _timerActive = false; _timerRemainingAtBaseMs = 0; }
   void setZones(const ZoneRenderInfo* zones, uint8_t count) override;
   void runDiagnosticSequence() override;
   void playBootAnimation(unsigned long durationMs) override;
@@ -46,11 +52,20 @@ private:
       float scrollSpeed;
       uint8_t marginTop;
       uint8_t marginBottom;
-      bool hasBgColor = false;
-      uint8_t bgR = 0, bgG = 0, bgB = 0;
+      bool hasBgColor;
+      uint8_t bgR;
+      uint8_t bgG;
+      uint8_t bgB;
+      String font;
+      uint8_t scaleX;
+      uint8_t scaleY;
+      uint8_t spacing;
+      LineRule rules[3];
+      uint8_t ruleCount;
     } lines[MAX_LINES_PER_ZONE];
     bool hasData;
-    uint8_t scale;
+    uint8_t scaleX;
+    uint8_t scaleY;
     String valign;
     uint8_t borderCount;
     BorderRange borderRanges[MAX_BORDER_RANGES];
@@ -77,11 +92,14 @@ private:
   unsigned long _timerTotalMs = 0;
   unsigned long _timerBaseMs = 0;
   unsigned long _lastTimerRedraw = 0;
+  bool _timerActive = false;
 
   String substituteTimer(const String& text) const;
   void redraw();
-  void drawText5x7Scaled(const char* s, int x, int y, uint16_t color, int scale, int clipXStart, int clipXEnd, uint8_t borderCount = 0, const BorderRange* borderRanges = nullptr);
-  int  textWidth5x7Scaled(const char* s, int scale);
+  void drawText5x7Scaled(const char* s, int x, int y, uint16_t color, int scaleX, int scaleY, int spacing, int clipXStart, int clipXEnd, uint8_t borderCount, const BorderRange* borderRanges);
+  int  textWidth5x7Scaled(const char* s, int scaleX, int spacing);
+  int textWidthDigitalScaled(const char* s, int scaleX, int spacing);
+  void drawTextDigitalScaled(const char* s, int x, int y, uint16_t color, int scaleX, int scaleY, int spacing, int clipXStart, int clipXEnd, uint8_t borderCount, const BorderRange* borderRanges);
   void drawPixelMapped(int x, int y, uint16_t color);
 };
 

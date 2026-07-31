@@ -56,18 +56,56 @@ async function handlePublishAll() {
 
       const courtQueueCount = snapshot.queue.filter(q => !q.courtName || q.courtName === c.name).length;
 
-      const upcoming = snapshot.queue
-        .filter(q => !q.courtName || q.courtName === c.name)
-        .map(q => ({
-          name: q.matchTitle,
+      const upcoming = snapshot.upcomingGames
+        .filter(g => g.id === c.id)
+        .map(g => ({
+          name: g.matchTitle,
+          durationMinutes: g.durationMin,
+          startTime: new Date(g.startTime * 1000).toISOString(),
+        }));
+
+      // Also append waitlist entries that are simulated to run on this court!
+      snapshot.queue.filter(q => q.simulatedCourtId === c.id).forEach(q => {
+        upcoming.push({
+          name: q.matchTitle || (q.firstName + " " + q.lastName + " - " + q.matchType),
           durationMinutes: q.durationMin,
-          }));
+          startTime: new Date(q.estimatedStartTime * 1000).toISOString(),
+        });
+      });
+
+      // Sort upcoming chronologically
+      upcoming.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+
+      let nextName = '';
+      let nextMatch = '';
+      let nextWait = '';
+      let nextBookedTime = '';
+
+      if (upcoming.length > 0) {
+        const next = upcoming[0];
+        // For queue entries we have the full name stored as firstName + lastName in name, but let's just use it
+        nextName = next.name;
+        nextMatch = next.name; // or matchType if we had it separated
+        
+        const formatTime = (isoString: string) => 
+          new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: 'numeric', hour12: true }).format(new Date(isoString));
+        
+        nextBookedTime = formatTime(next.startTime);
+        
+        const nowMs = Date.now();
+        const startMs = new Date(next.startTime).getTime();
+        const waitMins = Math.max(0, Math.floor((startMs - nowMs) / 60000));
+        nextWait = waitMins <= 0 ? 'Now' : `~${waitMins} min`;
+      }
 
       const payload = generatePayload(c.id, { current, upcoming }, {
         courtName: c.name,
         queueCount: courtQueueCount,
         displaySequence,
-        
+        nextName,
+        nextMatch,
+        nextWait,
+        nextBookedTime,
         brightness,
         rotation,
       });

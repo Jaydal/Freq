@@ -1,6 +1,18 @@
 #pragma once
 #include <Arduino.h>
 
+struct LineRule {
+  String type;      // "time_remaining"
+  String op;        // "<", ">", "<=", ">=", "=="
+  long value;       // Seconds threshold
+  uint16_t color;
+  String effect;
+  bool activeColor;
+  bool activeEffect;
+  bool activeAlign;
+  String align;
+};
+
 struct ZoneLineRender {
   String text;
   uint8_t r;
@@ -15,6 +27,12 @@ struct ZoneLineRender {
   uint8_t bgR = 0;
   uint8_t bgG = 0;
   uint8_t bgB = 0;
+  String font;
+  uint8_t scaleX = 0;
+  uint8_t scaleY = 0;
+  uint8_t spacing = 1;
+  LineRule rules[3];
+  uint8_t ruleCount = 0;
 };
 
 struct BorderRange {
@@ -29,7 +47,8 @@ struct ZoneRenderInfo {
   ZoneLineRender lines[2];
   uint8_t borderCount;
   BorderRange borderRanges[4];
-  uint8_t scale;
+  uint8_t scaleX;
+  uint8_t scaleY;
   String valign;
 };
 
@@ -45,6 +64,7 @@ public:
   virtual void setScrollSpeed(uint16_t msPerPixel) {}
   virtual void setAnimationMode(const char* mode) {}
   virtual void setTimer(unsigned long remainingMs, unsigned long totalMs, unsigned long baseMs) {}
+  virtual void clearTimer() {}
   virtual void setZones(const ZoneRenderInfo* zones, uint8_t count) {}
   virtual void runDiagnosticSequence() {}
   virtual void playBootAnimation(unsigned long durationMs) {}

@@ -10,7 +10,7 @@ export interface ScheduleData {
     matchType?: string;
     players?: string;
   } | null;
-  upcoming: { name: string }[];
+  upcoming: { name: string; startTime?: string; durationMinutes?: number }[];
 }
 
 export interface DisplaySequenceSection {
@@ -27,9 +27,10 @@ export interface DisplaySequenceSection {
       panelStart: number;
       panelEnd: number;
       borderRows?: { start: number; end: number }[];
-      scale?: number;
+      scaleX?: number;
+      scaleY?: number;
       valign?: string;
-      lines: { text: string; color: string; effect: string; align?: string; scrollSpeed?: number; marginTop?: number; marginBottom?: number; subpages?: { text: string; color: string; effect: string; align?: string; scrollSpeed?: number; durationMs: number }[] }[];
+      lines: { text: string; color: string; bgColor?: string; font?: string; scaleX?: number; scaleY?: number; spacing?: number; effect: string; align?: string; scrollSpeed?: number; marginTop?: number; marginBottom?: number; rules?: { type: string; operator: '<' | '>'; value: number; color?: string; effect?: string }[]; subpages?: { text: string; color: string; bgColor?: string; font?: string; effect: string; align?: string; scrollSpeed?: number; durationMs: number }[] }[];
     }[];
   }[];
 }
@@ -40,8 +41,8 @@ export interface DisplaySequenceConfig {
 }
 
 const DEFAULT_SEQUENCE: DisplaySequenceConfig = {
-  idle: { interval: 10, pages: [{ text: "{court_name}" }, { text: "{queue_count} IN QUEUE" }] },
-  game: { interval: 10, pages: [{ text: "{match_title}" }, { text: "{timer} LEFT" }, { text: "{queue_count} IN QUEUE" }] },
+  idle: { interval: 10, pages: [{ text: "{court_name}" }, { text: "IDLE" }] },
+  game: { interval: 10, pages: [{ text: "{match_title}" }, { text: "{timer}" }] },
 };
 
 
@@ -128,7 +129,8 @@ export function generatePayload(
             panelStart: zone.panelStart,
             panelEnd: zone.panelEnd,
             ...(zone.borderRows && zone.borderRows.length > 0 ? { borderRows: zone.borderRows } : {}),
-            ...(zone.scale ? { scale: zone.scale } : {}),
+            ...(zone.scaleX ? { scaleX: zone.scaleX } : {}),
+            ...(zone.scaleY ? { scaleY: zone.scaleY } : {}),
             ...(zone.valign && zone.valign !== 'middle' ? { valign: zone.valign } : {}),
             lines: zone.lines.map(line => {
               if (line.subpages && line.subpages.length > 0) {
@@ -136,6 +138,7 @@ export function generatePayload(
                   subpages: line.subpages.map(sp => ({
                     text: substituteVars(sp.text, subVars),
                     color: sp.color,
+                    ...(sp.bgColor ? { bgColor: sp.bgColor } : {}),
                     effect: sp.effect === 'paginate' ? 'STATIC' : sp.effect,
                     ...(sp.align && sp.align !== 'center' ? { align: sp.align } : {}),
                     ...(sp.scrollSpeed != null && sp.scrollSpeed !== 1 ? { scrollSpeed: sp.scrollSpeed } : {}),
@@ -145,6 +148,10 @@ export function generatePayload(
                   ...(line.marginTop != null && line.marginTop !== 0 ? { marginTop: line.marginTop } : {}),
                   ...(line.marginBottom != null && line.marginBottom !== 2 ? { marginBottom: line.marginBottom } : {}),
                   ...(line.font ? { font: line.font } : {}),
+                  ...(line.scaleX ? { scaleX: line.scaleX } : {}),
+                  ...(line.scaleY ? { scaleY: line.scaleY } : {}),
+                  ...(line.spacing ? { spacing: line.spacing } : {}),
+                  ...(line.rules && line.rules.length > 0 ? { rules: line.rules } : {}),
                 };
               }
               const rawText = substituteVars(line.text, subVars);
@@ -153,6 +160,7 @@ export function generatePayload(
                 subpages: [{
                   text: rawText,
                   color: line.color || defaultColor,
+                  ...(line.bgColor ? { bgColor: line.bgColor } : {}),
                   effect: eff === 'paginate' ? 'STATIC' : eff,
                   ...(line.align && line.align !== 'center' ? { align: line.align } : {}),
                   ...(line.scrollSpeed != null && line.scrollSpeed !== 1 ? { scrollSpeed: line.scrollSpeed } : {}),
@@ -162,6 +170,10 @@ export function generatePayload(
                 ...(line.marginTop != null && line.marginTop !== 0 ? { marginTop: line.marginTop } : {}),
                 ...(line.marginBottom != null && line.marginBottom !== 2 ? { marginBottom: line.marginBottom } : {}),
                 ...(line.font ? { font: line.font } : {}),
+                ...(line.scaleX ? { scaleX: line.scaleX } : {}),
+                ...(line.scaleY ? { scaleY: line.scaleY } : {}),
+                ...(line.spacing ? { spacing: line.spacing } : {}),
+                ...(line.rules && line.rules.length > 0 ? { rules: line.rules } : {}),
               };
             }),
           }));
@@ -211,14 +223,30 @@ export function generatePayload(
     // Upcoming Games Blocks
     if (schedule.upcoming && schedule.upcoming.length > 0) {
       for (const u of schedule.upcoming) {
-        const uDur = (u as any).durationMinutes || 30; // fallback to 30 min
-        const startEpoch = nextStartEpoch;
+        const uDur = (u as any).durationMinutes || 30;
+        let startEpoch = nextStartEpoch;
+
+        const uStartStr = (u as any).startTime;
+        const uStart = uStartStr ? Math.floor(new Date(uStartStr).getTime() / 1000) : 0;
+        
+        if (uStart > nextStartEpoch) {
+          blocks.push({
+            startEpoch: nextStartEpoch,
+            endEpoch: uStart,
+            pages: buildPages(null, 'OPEN', sequence.idle)
+          });
+          startEpoch = uStart;
+        } else if (uStart > 0 && uStart < nextStartEpoch) {
+          // If it overlaps, clamp it
+          startEpoch = nextStartEpoch;
+        }
+        
         const endEpoch = startEpoch + uDur * 60;
         
         blocks.push({
           startEpoch,
           endEpoch,
-          pages: buildPages(u, 'PLAYING', sequence.game) // Use PLAYING so it renders as a game
+          pages: buildPages(u, 'PLAYING', sequence.game)
         });
         nextStartEpoch = endEpoch;
       }

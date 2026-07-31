@@ -101,7 +101,17 @@ interface Props {
   sequence: string;
 }
 
-function parseSequence(raw: string): Record<SectionKey, SectionState> {
+type ParseResult = { sections: Record<SectionKey, SectionState>; parseError: string | null };
+
+function getDefaultSections(): Record<SectionKey, SectionState> {
+  // Hardcoded minimal fallback — avoids calling parseSequenceRaw which could recurse
+  return {
+    idle: { interval: 10, pages: [{ durationSeconds: 10, zones: [{ panelStart: 0, panelEnd: 2, lines: [{ subpages: [{ text: '{court_name}', color: '#00FF00', effect: 'STATIC', durationMs: 5000 }] }] }] }] },
+    game: { interval: 10, pages: [{ durationSeconds: 10, zones: [{ panelStart: 0, panelEnd: 2, lines: [{ subpages: [{ text: '{match_title}', color: '#00FFFF', effect: 'SCROLL', durationMs: 5000 }] }, { subpages: [{ text: '{timer}', color: '#FFFFFF', effect: 'STATIC', durationMs: 5000 }] }] }] }] },
+  };
+}
+
+function parseSequenceRaw(raw: string): ParseResult {
   try {
     const parsed = JSON.parse(raw);
     const sections: Record<SectionKey, SectionState> = {} as Record<SectionKey, SectionState>;
@@ -113,11 +123,13 @@ function parseSequence(raw: string): Record<SectionKey, SectionState> {
           return {
             durationSeconds: p.durationSeconds ?? s.interval ?? 10,
             ...(p.hideIfEmpty && p.hideIfEmpty.length > 0 ? { hideIfEmpty: p.hideIfEmpty } : {}),
+            ...(p.showIfEmpty && p.showIfEmpty.length > 0 ? { showIfEmpty: p.showIfEmpty } : {}),
             zones: p.zones.map((z: any) => ({
               panelStart: z.panelStart ?? 0,
               panelEnd: z.panelEnd ?? 2,
               borderRows: z.borderRows && z.borderRows.length > 0 ? z.borderRows : undefined,
-              scale: z.scale,
+              scaleX: z.scaleX ?? z.scale,
+              scaleY: z.scaleY ?? z.scale,
               valign: z.valign,
               lines: (
                 z.lines || [
@@ -135,6 +147,8 @@ function parseSequence(raw: string): Record<SectionKey, SectionState> {
         }
         return {
           durationSeconds: p.durationSeconds ?? s.interval ?? 10,
+          ...(p.hideIfEmpty && p.hideIfEmpty.length > 0 ? { hideIfEmpty: p.hideIfEmpty } : {}),
+          ...(p.showIfEmpty && p.showIfEmpty.length > 0 ? { showIfEmpty: p.showIfEmpty } : {}),
           zones: [
             {
               panelStart: 0,
@@ -158,12 +172,12 @@ function parseSequence(raw: string): Record<SectionKey, SectionState> {
       });
       sections[key] = { interval: s.interval ?? 10, pages };
     }
-    return sections;
-  } catch {
-    return parseSequence(DEFAULTS);
+    return { sections, parseError: null };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return { sections: getDefaultSections(), parseError: `Could not read saved sequence (${msg}). Showing defaults — please review before saving.` };
   }
 }
-
 function serializeSequence(
   sections: Record<SectionKey, SectionState>,
   brightness: number,
@@ -176,12 +190,14 @@ function serializeSequence(
       pages: sections[key].pages.map(p => ({
         durationSeconds: p.durationSeconds,
         ...(p.hideIfEmpty && p.hideIfEmpty.length > 0 ? { hideIfEmpty: p.hideIfEmpty } : {}),
+        ...(p.showIfEmpty && p.showIfEmpty.length > 0 ? { showIfEmpty: p.showIfEmpty } : {}),
         zones: p.zones.map(z => ({
           panelStart: z.panelStart,
           panelEnd: z.panelEnd,
           lines: z.lines,
           ...(z.borderRows && z.borderRows.length > 0 ? { borderRows: z.borderRows } : {}),
-          ...(z.scale ? { scale: z.scale } : {}),
+          ...(z.scaleX ? { scaleX: z.scaleX } : {}),
+          ...(z.scaleY ? { scaleY: z.scaleY } : {}),
           ...(z.valign && z.valign !== 'middle' ? { valign: z.valign } : {}),
         })),
       })),
@@ -195,9 +211,11 @@ function clampPage(page: number, max: number): number {
 }
 
 export function DisplaySequenceEditorV2({ sequence: initial }: Props) {
+  const parsed = useMemo(() => parseSequenceRaw(initial), [initial]);
   const [sections, setSections] = useState<
     Record<SectionKey, SectionState>
-  >(() => parseSequence(initial));
+  >(() => parsed.sections);
+  const [parseWarning, setParseWarning] = useState<string | null>(() => parsed.parseError);
   const [brightness, setBrightness] = useState<number>(() => {
     try { const p = JSON.parse(initial); return p.brightness ?? 153; } catch { return 153; }
   });
@@ -343,6 +361,13 @@ export function DisplaySequenceEditorV2({ sequence: initial }: Props) {
 
   return (
     <div className="space-y-4">
+      {parseWarning && (
+        <div className="flex items-start gap-2 px-3 py-2 bg-yellow-950/60 border border-yellow-700/50 rounded-md text-xs text-yellow-300">
+          <span className="shrink-0 mt-0.5">⚠</span>
+          <span>{parseWarning}</span>
+          <button onClick={() => setParseWarning(null)} className="ml-auto shrink-0 text-yellow-500 hover:text-yellow-300">✕</button>
+        </div>
+      )}
       <div className="flex items-center gap-1 border-b border-zinc-800 pb-2">
         {SECTIONS.map(s => (
           <button
@@ -419,6 +444,7 @@ export function DisplaySequenceEditorV2({ sequence: initial }: Props) {
         previewIndex={isPreviewing ? previewPageIndex : undefined}
         durationSeconds={page?.durationSeconds ?? 10}
         hideIfEmpty={page?.hideIfEmpty}
+        showIfEmpty={page?.showIfEmpty}
         onHideIfEmptyChange={vars => {
           setSections(prev => ({
             ...prev,
@@ -426,6 +452,17 @@ export function DisplaySequenceEditorV2({ sequence: initial }: Props) {
               ...prev[activeSection],
               pages: prev[activeSection].pages.map((p, i) =>
                 i === pageIdx ? { ...p, hideIfEmpty: vars.length > 0 ? vars : undefined } : p
+              ),
+            },
+          }));
+        }}
+        onShowIfEmptyChange={vars => {
+          setSections(prev => ({
+            ...prev,
+            [activeSection]: {
+              ...prev[activeSection],
+              pages: prev[activeSection].pages.map((p, i) =>
+                i === pageIdx ? { ...p, showIfEmpty: vars.length > 0 ? vars : undefined } : p
               ),
             },
           }));

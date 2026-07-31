@@ -17,7 +17,6 @@ export default async function SettingsPage() {
   const matchTypes: string[] = productsRow?.value ? JSON.parse(productsRow.value).matchTypes ?? ['1v1', '2v2'] : ['1v1', '2v2'];
   const durations: number[] = productsRow?.value ? JSON.parse(productsRow.value).durations ?? [30, 60, 90] : [30, 60, 90];
   const rates: Record<string, number> = pricesRow?.value ? JSON.parse(pricesRow.value) : { '30': 150, '60': 300, '90': 450 };
-  const prepTimeSec = parseInt(prepRow?.value ?? '300', 10);
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -32,7 +31,7 @@ export default async function SettingsPage() {
           <CardDescription className="text-zinc-500">Configure available match types, durations, rates, and preparation time.</CardDescription>
         </CardHeader>
         <CardContent>
-          <ProductsEditor matchTypes={matchTypes} durations={durations} rates={rates} prepTimeSec={prepTimeSec} />
+          <ProductsEditor matchTypes={matchTypes} durations={durations} rates={rates} />
         </CardContent>
       </Card>
 

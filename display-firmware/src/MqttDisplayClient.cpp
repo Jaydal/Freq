@@ -161,7 +161,7 @@ void MqttDisplayClient::update() {
       if (newBlockIndex < (int)_blocks.size() - 1 && totalSec < 86400) {
          _driver.setTimer(remainingSec * 1000, totalSec * 1000, millis());
       } else {
-         _driver.setTimer(0, 1000, millis());
+         _driver.clearTimer(); // Idle block: disable timer so {timer} shows nothing
       }
     }
   }
@@ -173,11 +173,12 @@ void MqttDisplayClient::update() {
 
     if (now - _lastPageChangeTime >= durationMs) {
       _lastPageChangeTime = now;
-      _currentPageIndex = (_currentPageIndex + 1) % _playlist.size();
-      memset(_subpageIdx, 0, sizeof(_subpageIdx));
-      memset(_lastSubChange, 0, sizeof(_lastSubChange));
-
-      applyCurrentPage();
+      if (_playlist.size() > 1) {
+        _currentPageIndex = (_currentPageIndex + 1) % _playlist.size();
+        memset(_subpageIdx, 0, sizeof(_subpageIdx));
+        memset(_lastSubChange, 0, sizeof(_lastSubChange));
+        applyCurrentPage();
+      }
     }
   }
 
@@ -212,10 +213,12 @@ void MqttDisplayClient::update() {
     if (pageDuration == 0) pageDuration = 10000;
     if (now - _overridePageChangeTime >= pageDuration) {
       _overridePageChangeTime = now;
-      _overridePageIndex = (_overridePageIndex + 1) % _overridePages.size();
-      memset(_subpageIdx, 0, sizeof(_subpageIdx));
-      memset(_lastSubChange, 0, sizeof(_lastSubChange));
-      applyCurrentPage();
+      if (_overridePages.size() > 1) {
+        _overridePageIndex = (_overridePageIndex + 1) % _overridePages.size();
+        memset(_subpageIdx, 0, sizeof(_subpageIdx));
+        memset(_lastSubChange, 0, sizeof(_lastSubChange));
+        applyCurrentPage();
+      }
     }
     // Sub-page cycling for override lines (use current index after any rotation)
     {
@@ -258,7 +261,8 @@ void MqttDisplayClient::applyCurrentPage() {
       rz[zi].panelStart = page.zones[zi].panelStart;
       rz[zi].panelEnd = page.zones[zi].panelEnd;
       rz[zi].lineCount = page.zones[zi].lineCount;
-      rz[zi].scale = page.zones[zi].scale;
+      rz[zi].scaleX = page.zones[zi].scaleX;
+      rz[zi].scaleY = page.zones[zi].scaleY;
       rz[zi].valign = page.zones[zi].valign.c_str();
       rz[zi].borderCount = page.zones[zi].borderCount;
       for (int bri = 0; bri < page.zones[zi].borderCount && bri < 4; bri++) {
@@ -279,6 +283,7 @@ void MqttDisplayClient::applyCurrentPage() {
         rz[zi].lines[li].b = b;
         rz[zi].lines[li].effect = sp.effect.c_str();
         rz[zi].lines[li].align = sp.align.c_str();
+        rz[zi].lines[li].font = sp.font.c_str();
         rz[zi].lines[li].scrollSpeed = sp.scrollSpeed;
         rz[zi].lines[li].marginTop = srcLine.marginTop;
         rz[zi].lines[li].marginBottom = srcLine.marginBottom;
@@ -288,6 +293,13 @@ void MqttDisplayClient::applyCurrentPage() {
           parseHexColor(sp.bgColor, br, bg, bb);
           rz[zi].lines[li].bgR = br; rz[zi].lines[li].bgG = bg; rz[zi].lines[li].bgB = bb;
         }
+        rz[zi].lines[li].ruleCount = srcLine.ruleCount;
+        for (int r = 0; r < srcLine.ruleCount; r++) {
+          rz[zi].lines[li].rules[r] = srcLine.rules[r];
+        }
+        rz[zi].lines[li].scaleX = srcLine.scaleX;
+        rz[zi].lines[li].scaleY = srcLine.scaleY;
+        rz[zi].lines[li].spacing = srcLine.spacing;
       }
     }
     _driver.setZones(rz, page.zoneCount);
@@ -306,7 +318,8 @@ void MqttDisplayClient::applyCurrentPage() {
     rz[zi].panelStart = page.zones[zi].panelStart;
     rz[zi].panelEnd = page.zones[zi].panelEnd;
     rz[zi].lineCount = page.zones[zi].lineCount;
-    rz[zi].scale = page.zones[zi].scale;
+    rz[zi].scaleX = page.zones[zi].scaleX;
+    rz[zi].scaleY = page.zones[zi].scaleY;
     rz[zi].valign = page.zones[zi].valign.c_str();
     rz[zi].borderCount = page.zones[zi].borderCount;
     for (int bri = 0; bri < page.zones[zi].borderCount && bri < 4; bri++) {
@@ -328,6 +341,7 @@ void MqttDisplayClient::applyCurrentPage() {
       rz[zi].lines[li].b = b;
       rz[zi].lines[li].effect = sp.effect.c_str();
       rz[zi].lines[li].align = sp.align.c_str();
+      rz[zi].lines[li].font = sp.font.c_str();
       rz[zi].lines[li].scrollSpeed = sp.scrollSpeed;
       rz[zi].lines[li].marginTop = srcLine.marginTop;
       rz[zi].lines[li].marginBottom = srcLine.marginBottom;
@@ -337,6 +351,13 @@ void MqttDisplayClient::applyCurrentPage() {
         parseHexColor(sp.bgColor, br, bg, bb);
         rz[zi].lines[li].bgR = br; rz[zi].lines[li].bgG = bg; rz[zi].lines[li].bgB = bb;
       }
+      rz[zi].lines[li].ruleCount = srcLine.ruleCount;
+      for (int r = 0; r < srcLine.ruleCount; r++) {
+        rz[zi].lines[li].rules[r] = srcLine.rules[r];
+      }
+      rz[zi].lines[li].scaleX = srcLine.scaleX;
+      rz[zi].lines[li].scaleY = srcLine.scaleY;
+      rz[zi].lines[li].spacing = srcLine.spacing;
     }
   }
 
@@ -468,7 +489,8 @@ void MqttDisplayClient::handleCmdMessage(uint8_t* payload, unsigned int len) {
             DisplayZone& dz = p.zones[zi];
             dz.panelStart = z["panelStart"] | zi;
             dz.panelEnd = z["panelEnd"] | zi;
-            dz.scale = z["scale"] | 0;
+            dz.scaleX = z["scaleX"] | 0;
+            dz.scaleY = z["scaleY"] | 0;
             dz.valign = z["valign"] | "middle";
             JsonArray lines = z["lines"];
             uint8_t li = 0;
@@ -478,6 +500,8 @@ void MqttDisplayClient::handleCmdMessage(uint8_t* payload, unsigned int len) {
                 SubPage sp;
                 sp.text = l["text"] | "";
                 sp.color = l["color"] | "#FFFFFF";
+                sp.bgColor = l["bgColor"] | "";
+                sp.font = l["font"] | "";
                 sp.effect = l["effect"] | "SCROLL";
                 sp.align = l["align"] | "center";
                 sp.scrollSpeed = l["scrollSpeed"] | 1.0f;
@@ -499,7 +523,8 @@ void MqttDisplayClient::handleCmdMessage(uint8_t* payload, unsigned int len) {
           p.zones[0].panelEnd = 2;
           p.zones[0].lineCount = 1;
           p.zones[0].borderCount = 0;
-          p.zones[0].scale = 0;
+          p.zones[0].scaleX = 0;
+          p.zones[0].scaleY = 0;
           p.zones[0].valign = "middle";
           {
             SubPage sp;
@@ -522,6 +547,9 @@ void MqttDisplayClient::handleCmdMessage(uint8_t* payload, unsigned int len) {
       memset(_subpageIdx, 0, sizeof(_subpageIdx));
       memset(_lastSubChange, 0, sizeof(_lastSubChange));
       log_i("[mqtt-cmd] OVERRIDE: %d pages", _overridePages.size());
+      // H1 fix: apply immediately so it appears without waiting for rotation timer
+      applyCurrentPage();
+      _driver.update();
     }
     return;
   }
@@ -618,7 +646,8 @@ void MqttDisplayClient::handleMessage(uint8_t* payload, unsigned int len) {
           z.panelEnd = zone["panelEnd"] | 2;
           z.lineCount = 0;
           z.borderCount = 0;
-          z.scale = zone["scale"] | 0;
+          z.scaleX = zone["scaleX"] | 0;
+          z.scaleY = zone["scaleY"] | 0;
           z.valign = zone["valign"] | "";
 
           JsonArray borderArr = zone["borderRows"];
@@ -643,26 +672,86 @@ void MqttDisplayClient::handleMessage(uint8_t* payload, unsigned int len) {
                   SubPage sp;
                   sp.text = spv["text"].as<std::string>();
                   sp.color = spv["color"].as<std::string>();
-                  sp.bgColor = spv["bgColor"].as<std::string>();
-                  sp.effect = spv["effect"].as<std::string>();
-                  sp.align = spv["align"].as<std::string>();
-                  sp.scrollSpeed = spv["scrollSpeed"].as<float>();
-                  sp.durationMs = spv["durationMs"].as<uint16_t>();
+                  sp.bgColor = spv["bgColor"].is<std::string>() ? spv["bgColor"].as<std::string>() : "";
+                  sp.font = spv["font"].is<std::string>() ? spv["font"].as<std::string>() : "";
+                  sp.effect = spv["effect"].is<std::string>() ? spv["effect"].as<std::string>() : "SCROLL";
+                  sp.align = spv["align"].is<std::string>() ? spv["align"].as<std::string>() : "center";
+                  sp.scrollSpeed = spv["scrollSpeed"].is<float>() ? spv["scrollSpeed"].as<float>() : 1.0f;
+                  sp.durationMs = spv["durationMs"].is<uint16_t>() ? spv["durationMs"].as<uint16_t>() : 5000;
                   if (sp.durationMs == 0) sp.durationMs = 5000;
                   zl.subpages.push_back(sp);
                 }
               } else {
                 SubPage sp;
                 sp.text = line["text"].as<std::string>();
-                sp.color = line["color"].as<std::string>();
-                sp.effect = line["effect"].as<std::string>();
-                sp.align = line["align"].as<std::string>();
-                sp.scrollSpeed = line["scrollSpeed"].as<float>();
+                sp.color = line["color"].is<std::string>() ? line["color"].as<std::string>() : "#FFFFFF";
+                sp.bgColor = line["bgColor"].is<std::string>() ? line["bgColor"].as<std::string>() : "";
+                sp.font = line["font"].is<std::string>() ? line["font"].as<std::string>() : "";
+                sp.effect = line["effect"].is<std::string>() ? line["effect"].as<std::string>() : "SCROLL";
+                sp.align = line["align"].is<std::string>() ? line["align"].as<std::string>() : "center";
+                sp.scrollSpeed = line["scrollSpeed"].is<float>() ? line["scrollSpeed"].as<float>() : 1.0f;
                 sp.durationMs = 5000;
                 zl.subpages.push_back(sp);
               }
               zl.marginTop = line["marginTop"] | 0;
               zl.marginBottom = line["marginBottom"] | 2;
+              
+              if (!line["font"].isNull()) {
+                zl.font = line["font"].as<std::string>();
+              } else {
+                zl.font = "default";
+              }
+              
+              zl.scaleX = line["scaleX"] | 0;
+              zl.scaleY = line["scaleY"] | 0;
+              zl.spacing = line["spacing"] | 1;
+
+              zl.ruleCount = 0;
+              JsonArray rules = line["rules"];
+              if (!rules.isNull()) {
+                for (JsonObject rule : rules) {
+                  if (zl.ruleCount >= 3) break;
+                  zl.rules[zl.ruleCount].type = rule["type"].is<const char*>() ? rule["type"].as<String>() : "time_remaining";
+                  
+                  String opStr = rule["operator"].is<const char*>() ? rule["operator"].as<String>() : "<";
+                  zl.rules[zl.ruleCount].op = opStr.length() > 0 ? opStr : "<";
+                  
+                  zl.rules[zl.ruleCount].value = rule["value"] | 0;
+                  
+                  if (rule["color"].is<const char*>()) {
+                    zl.rules[zl.ruleCount].activeColor = true;
+                    // parse color later in applyCurrentPage
+                    String colStr = rule["color"].as<String>();
+                    if (colStr.length() == 7 && colStr[0] == '#') {
+                      long rgb = strtol(colStr.c_str() + 1, NULL, 16);
+                      uint8_t r = (rgb >> 16) & 0xFF;
+                      uint8_t g = (rgb >> 8) & 0xFF;
+                      uint8_t b = rgb & 0xFF;
+                      zl.rules[zl.ruleCount].color = ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3); // 565 format
+                    } else {
+                      zl.rules[zl.ruleCount].color = 0; // Default to black or handled elsewhere
+                    }
+                  } else {
+                    zl.rules[zl.ruleCount].activeColor = false;
+                  }
+                  
+                  if (rule["effect"].is<const char*>()) {
+                    zl.rules[zl.ruleCount].activeEffect = true;
+                    zl.rules[zl.ruleCount].effect = rule["effect"].as<String>();
+                  } else {
+                    zl.rules[zl.ruleCount].activeEffect = false;
+                  }
+
+                  if (rule["align"].is<const char*>()) {
+                    zl.rules[zl.ruleCount].activeAlign = true;
+                    zl.rules[zl.ruleCount].align = rule["align"].as<String>();
+                  } else {
+                    zl.rules[zl.ruleCount].activeAlign = false;
+                  }
+                  
+                  zl.ruleCount++;
+                }
+              }
               z.lineCount++;
             }
           }
@@ -675,7 +764,8 @@ void MqttDisplayClient::handleMessage(uint8_t* payload, unsigned int len) {
         z.panelEnd = 2;
         z.lineCount = 1;
         z.borderCount = 0;
-        z.scale = 0;
+        z.scaleX = 0;
+        z.scaleY = 0;
         z.valign = "middle";
         {
           SubPage sp;

@@ -2,6 +2,8 @@ import { createClient } from '@/lib/supabase/server';
 import { isSlotAvailable } from './booking-engine';
 import { publishDisplay } from '@/lib/mqtt';
 import { generatePayload } from '@/lib/display/sports-caster';
+import { getBoardSnapshot } from '@/lib/queue/board-snapshot';
+import { publishBoardOnce } from '@/lib/queue/board-publisher';
 import { getCost, ProductsConfig } from '@/lib/products-config-types';
 
 async function getChargeAmount(duration: number, partySize: number): Promise<number> {
@@ -90,17 +92,52 @@ export async function finalizeBooking(entryId: string): Promise<{ success: boole
 
   const { data: gameData } = await supabase.from('games').select('start_time').eq('id', gameId).single();
 
-  const entryMatchType = entry.party_size === 4 ? '2v2' : '1v1';
-  await publishDisplay(entry.court_id, generatePayload(entry.court_id, {
-    current: {
-      name: entry.match_title || '',
-      startTime: gameData?.start_time || new Date().toISOString(),
-      durationMinutes: entry.duration,
-      matchTitle: entry.match_title || '',
-      matchType: entryMatchType,
-    },
-    upcoming: []
-  }));
+  try {
+    const snapshot = await getBoardSnapshot(supabase);
+    const c = snapshot.courts.find(ct => ct.id === entry.court_id);
+    if (c) {
+      let current = null;
+      if (c.startTime > 0) {
+        let name = c.matchTitle;
+        if (!name && c.players?.length) {
+          name = c.players.map(p => p.firstName).join(' & ') + ` - ${c.matchType}`;
+        }
+        if (!name) name = c.matchType;
+        
+        current = {
+          name,
+          startTime: new Date(c.startTime * 1000).toISOString(),
+          durationMinutes: c.durationMin,
+          matchTitle: c.matchTitle,
+          matchType: c.matchType,
+        };
+      }
+
+      const courtQueueCount = snapshot.queue.filter(q => !q.courtName || q.courtName === c.name).length;
+      const upcoming = snapshot.upcomingGames
+        .filter(g => g.id === c.id)
+        .map(g => ({
+          name: g.matchTitle,
+          durationMinutes: g.durationMin,
+          startTime: new Date(g.startTime * 1000).toISOString(),
+        }));
+
+      const { data: settings } = await supabase.from('settings').select('value').eq('key', 'displaySequence').single();
+      let displaySequence;
+      try { if (settings?.value) displaySequence = JSON.parse(settings.value); } catch {}
+
+      const payload = generatePayload(c.id, { current, upcoming }, {
+        courtName: c.name,
+        queueCount: courtQueueCount,
+        displaySequence,
+      });
+      
+      await publishDisplay(c.id, payload);
+    }
+    publishBoardOnce().catch(() => {});
+  } catch (e) {
+    console.error('Failed to publish display after finalizeBooking', e);
+  }
 
   return { success: true };
 }

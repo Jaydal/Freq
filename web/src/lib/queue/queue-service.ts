@@ -151,17 +151,7 @@ export async function joinQueue(params: JoinQueueParams): Promise<QueueEntry> {
     await deductWallet(params.memberId, charge, game.id);
 
     // Fire-and-forget: publish board update without blocking the response
-    const matchType = params.partySize === 4 ? '2v2' : '1v1';
-    publishDisplay(court.id, generatePayload(court.id, {
-      current: {
-        name: params.matchTitle || '',
-        startTime: new Date().toISOString(),
-        durationMinutes: params.duration,
-        matchTitle: params.matchTitle || '',
-        matchType,
-      },
-      upcoming: []
-    }));
+    fetch(new URL('/api/display/publish-all', process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000').toString(), { method: 'POST' }).catch(console.error);
 
     return {
       id: game.id,
@@ -204,6 +194,8 @@ export async function joinQueue(params: JoinQueueParams): Promise<QueueEntry> {
     await refundWallet(params.memberId, charge, "QUEUE_DEPOSIT_" + Date.now().toString(), "Queue join failed");
     throw new Error(error.message);
   }
+
+  fetch(new URL('/api/display/publish-all', process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000').toString(), { method: 'POST' }).catch(console.error);
 
   return entry as QueueEntry;
 }
