@@ -77,44 +77,85 @@ export const FONT_DIGITAL: Record<string, number[]> = {
   '-': [0x00, 0x00, 0x00, 0x1F, 0x00, 0x00, 0x00],
 };
 
+export const FONT_MICRO_3x5: Record<string, number[]> = {
+  'A': [0b010, 0b101, 0b111, 0b101, 0b101],
+  'P': [0b110, 0b101, 0b110, 0b100, 0b100],
+  'M': [0b101, 0b111, 0b101, 0b101, 0b101],
+};
+
 export const CHAR_W = 5;
 export const CHAR_H = 7;
 export const SPACING = 1;
 export const CELL_W = CHAR_W + SPACING;
 
-export function textWidth(text: string, font?: string) {
+export function textWidth(text: string, font?: string, bold: boolean = false) {
   let w = 0;
   let first = true;
+  let isSuperscript = false;
   for (const ch of text) {
-    if (!first) w += SPACING;
-    w += CHAR_W;
+    if (ch === '\x01') { isSuperscript = true; continue; }
+    const curScale = 1;
+    if (!first) w += SPACING * curScale;
+    const isMicro = isSuperscript && FONT_MICRO_3x5[ch.toUpperCase()];
+    const cw = isMicro ? 3 : (ch === ':' || ch === ' ') ? 3 : CHAR_W;
+    w += cw * curScale;
+    if (bold && !isSuperscript) w += 1 * curScale;
     first = false;
   }
   return w;
 }
 
-export function textToDots(text: string, offsetX = 0, offsetY = 0, font?: string, scaleX = 1, scaleY = 1, spacing = SPACING): { x: number; y: number }[] {
+// \x01 = superscript marker: chars after it render at scale 1, top-aligned (with 3x5 micro font for A/P/M)
+export function textToDots(text: string, offsetX = 0, offsetY = 0, font?: string, scaleX = 1, scaleY = 1, spacing = SPACING, bold = false): { x: number; y: number }[] {
   const dots: { x: number; y: number }[] = [];
   let cursor = offsetX;
+  let curScaleX = scaleX;
+  let curScaleY = scaleY;
+  let superscript = false;
   for (const ch of text) {
+    if (ch === '\x01') {
+      curScaleX = 1; curScaleY = 1; superscript = true;
+      continue;
+    }
+    const micro = superscript ? FONT_MICRO_3x5[ch.toUpperCase()] : undefined;
+    if (micro) {
+      for (let row = 0; row < 5; row++) {
+        for (let col = 0; col < 3; col++) {
+          if (micro[row] & (1 << (2 - col))) {
+            dots.push({ x: cursor + col, y: offsetY + row });
+          }
+        }
+      }
+      cursor += 3 + spacing;
+      continue;
+    }
     if (ch === ' ' && font !== 'digital') {
-      cursor += CHAR_W * scaleX + spacing * scaleX;
+      cursor += 3 * curScaleX + spacing * curScaleX;
       continue;
     }
     const rows = getChar(ch, font);
-    if (!rows) { cursor += spacing * scaleX; continue; }
+    if (!rows) {
+      cursor += spacing * curScaleX;
+      continue;
+    }
+    const charY = offsetY;
     for (let row = 0; row < CHAR_H; row++) {
       for (let col = 0; col < CHAR_W; col++) {
         if (rows[row] & (1 << (CHAR_W - 1 - col))) {
-          for (let dy = 0; dy < scaleY; dy++) {
-            for (let dx = 0; dx < scaleX; dx++) {
-              dots.push({ x: cursor + col * scaleX + dx, y: offsetY + row * scaleY + dy });
+          for (let dy = 0; dy < curScaleY; dy++) {
+            for (let dx = 0; dx < curScaleX; dx++) {
+              dots.push({ x: cursor + col * curScaleX + dx, y: charY + row * curScaleY + dy });
+              if (bold && !superscript) {
+                dots.push({ x: cursor + col * curScaleX + dx + curScaleX, y: charY + row * curScaleY + dy });
+              }
             }
           }
         }
       }
     }
-    cursor += (CHAR_W + spacing) * scaleX;
+    const cw = (ch === ':' || ch === ' ') ? 3 : CHAR_W;
+    cursor += (cw + spacing) * curScaleX;
+    if (bold && !superscript) cursor += 1 * curScaleX;
   }
   return dots;
 }

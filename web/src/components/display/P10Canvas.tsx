@@ -40,12 +40,19 @@ function getAvailableVRange(borderRows?: { start: number; end: number }[]): { to
   return { top: top >= 0 ? top : 0, bottom: bottom >= 0 ? bottom : PANEL_H - 1 };
 }
 
-export function textWidthPx(text: string, scale: number, font?: string, spacing: number = SPACING): number {
+// \x01 is the superscript marker — chars after it render at scale=1, top-aligned
+export function textWidthPx(text: string, scale: number, font?: string, spacing: number = SPACING, bold: boolean = false): number {
   let w = 0;
   let first = true;
+  let curScale = scale;
+  let isSuperscript = false;
   for (const ch of text) {
-    if (!first) w += spacing * scale;
-    w += CHAR_W * scale;
+    if (ch === '\x01') { curScale = 1; isSuperscript = true; continue; } // superscript: switch to scale 1
+    if (!first) w += spacing * curScale;
+    const isMicro = isSuperscript && (ch === 'A' || ch === 'P' || ch === 'M' || ch === 'a' || ch === 'p' || ch === 'm');
+    const cw = isMicro ? 3 : (ch === ':' || ch === ' ') ? 3 : CHAR_W;
+    w += cw * curScale;
+    if (bold && !isSuperscript) w += 1 * curScale;
     first = false;
   }
   return w;
@@ -76,6 +83,9 @@ function renderZoneDots(
   const availH = avail.bottom - avail.top + 1;
 
   const lineScaleXs = zone.lines.map((line) => {
+    // Mirror firmware fallback: line.scaleX → line.scaleY → zone.scaleX → zone.scaleY → auto
+    if (line.scaleX != null && line.scaleX > 0) return line.scaleX;
+    if (line.scaleY != null && line.scaleY > 0) return line.scaleY;
     if (zone.lines.length === 2) return 1;
     if (zone.scaleX) return zone.scaleX;
     const sp = (line as any).subpages?.[0];
@@ -83,13 +93,17 @@ function renderZoneDots(
     if (!sp) {
       if (line.effect === 'SCROLL') return 2;
       const firstSubpageFont = (line.subpages?.[0] as any)?.font;
-      const tw2x = textWidthPx(subst(line.text ?? '', mockVars).toUpperCase(), 2, firstSubpageFont, line.spacing ?? 1);
+      const firstSubpageBold = (line.subpages?.[0] as any)?.bold;
+      const tw2x = textWidthPx(subst(line.text ?? '', mockVars).toUpperCase(), 2, firstSubpageFont, line.spacing ?? 1, line.bold || firstSubpageBold);
       return tw2x <= zoneWidth ? 2 : 1;
     }
-    const tw2x = textWidthPx(subst(sp.text, mockVars).toUpperCase(), 2, undefined, line.spacing ?? 1);
+    const tw2x = textWidthPx(subst(sp.text, mockVars).toUpperCase(), 2, undefined, line.spacing ?? 1, line.bold || sp.bold);
     return tw2x <= zoneWidth ? 2 : 1;
   });
-  const lineScaleYs = zone.lines.map((_line, i) => {
+  const lineScaleYs = zone.lines.map((line, i) => {
+    // Mirror firmware fallback: line.scaleY → line.scaleX → zone.scaleY → zone.scaleX → auto
+    if (line.scaleY != null && line.scaleY > 0) return line.scaleY;
+    if (line.scaleX != null && line.scaleX > 0) return line.scaleX;
     if (zone.lines.length === 2) return 1;
     if (zone.scaleY) return zone.scaleY;
     return lineScaleXs[i]; // default: match X scale
@@ -127,6 +141,7 @@ function renderZoneDots(
     let displayAlign: 'left' | 'center' | 'right' = 'center';
     let displayScrollSpeed = 1;
     let displayFont: string | undefined;
+    let displayBold = false;
 
     if (subpages && subpages.length > 0) {
       const key = `${zoneIndex}-${li}`;
@@ -153,6 +168,7 @@ function renderZoneDots(
       displayEffect = sp.effect || 'STATIC';
       displayAlign = sp.align || 'center';
       displayScrollSpeed = sp.scrollSpeed ?? 1;
+      displayBold = sp.bold ?? false;
     } else {
       displayText = subst(line.text ?? '', mockVars).toUpperCase();
       displayColor = line.color || '#00FF00';
@@ -160,9 +176,10 @@ function renderZoneDots(
       displayEffect = line.effect || 'STATIC';
       displayAlign = line.align || 'center';
       displayScrollSpeed = line.scrollSpeed ?? 1;
+      displayBold = line.bold ?? false;
     }
 
-    const displayW = textWidthPx(displayText, scale, displayFont, line.spacing ?? 1);
+    const displayW = textWidthPx(displayText, scale, displayFont, line.spacing ?? 1, displayBold);
     const textW = displayW;
 
     if (displayEffect === 'BLINK') {
@@ -196,7 +213,7 @@ function renderZoneDots(
       });
     }
 
-    const rawDots = textToDots(displayText, 0, 0, displayFont, scaleX, scaleY, line.spacing ?? 1);
+    const rawDots = textToDots(displayText, 0, 0, displayFont, scaleX, scaleY, line.spacing ?? 1, displayBold);
     for (const d of rawDots) {
       const px = xOff + d.x;
       const py = yOff + d.y;
@@ -247,7 +264,7 @@ export function P10Canvas({ zones, selectedZoneIndex, onZoneSelect }: Props) {
     match_title: 'Juan | 2v2 Game',
     next_match: 'Maria & Alex vs Tom',
     next_wait: '5min',
-    next_booked_time: '2:30PM',
+    next_booked_time: '2:30\x01PM',
     _tick: String(tick),
   };
 

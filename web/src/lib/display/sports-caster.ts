@@ -30,7 +30,7 @@ export interface DisplaySequenceSection {
       scaleX?: number;
       scaleY?: number;
       valign?: string;
-      lines: { text: string; color: string; bgColor?: string; font?: string; scaleX?: number; scaleY?: number; spacing?: number; effect: string; align?: string; scrollSpeed?: number; marginTop?: number; marginBottom?: number; rules?: { type: string; operator: '<' | '>'; value: number; color?: string; effect?: string }[]; subpages?: { text: string; color: string; bgColor?: string; font?: string; effect: string; align?: string; scrollSpeed?: number; durationMs: number }[] }[];
+      lines: { text: string; color: string; bgColor?: string; font?: string; bold?: boolean; scaleX?: number; scaleY?: number; spacing?: number; effect: string; align?: string; scrollSpeed?: number; marginTop?: number; marginBottom?: number; rules?: { type: string; operator: '<' | '>'; value: number; color?: string; effect?: string }[]; subpages?: { text: string; color: string; bgColor?: string; font?: string; bold?: boolean; effect: string; align?: string; scrollSpeed?: number; durationMs: number }[] }[];
     }[];
   }[];
 }
@@ -41,7 +41,7 @@ export interface DisplaySequenceConfig {
 }
 
 const DEFAULT_SEQUENCE: DisplaySequenceConfig = {
-  idle: { interval: 10, pages: [{ text: "{court_name}" }, { text: "IDLE" }] },
+  idle: { interval: 10, pages: [{ text: "{court_name}" }, { text: "UP NEXT: {next_match}", color: "#FFFF00", hideIfEmpty: ["{next_match}"] }] },
   game: { interval: 10, pages: [{ text: "{match_title}" }, { text: "{timer}" }] },
 };
 
@@ -88,7 +88,16 @@ export function generatePayload(
   const serverTime = Math.floor(nowMs / 1000);
   const courtName = opts?.courtName ?? courtId;
   const queueCount = opts?.queueCount ?? 0;
-  const sequence = opts?.displaySequence ?? DEFAULT_SEQUENCE;
+  const rawSeq = opts?.displaySequence;
+  const idleSection: DisplaySequenceSection | undefined =
+    rawSeq?.idle || (rawSeq as any)?.sections?.idle;
+  const gameSection: DisplaySequenceSection | undefined =
+    rawSeq?.game || (rawSeq as any)?.sections?.game;
+
+  const sequence = {
+    idle: idleSection ?? DEFAULT_SEQUENCE.idle,
+    game: gameSection ?? DEFAULT_SEQUENCE.game,
+  };
 
   const blocks: import('../mqtt').DisplayBlock[] = [];
 
@@ -133,6 +142,7 @@ export function generatePayload(
             ...(zone.scaleY ? { scaleY: zone.scaleY } : {}),
             ...(zone.valign && zone.valign !== 'middle' ? { valign: zone.valign } : {}),
             lines: zone.lines.map(line => {
+              const lineFont = line.font || line.subpages?.[0]?.font;
               if (line.subpages && line.subpages.length > 0) {
                 return {
                   subpages: line.subpages.map(sp => ({
@@ -142,12 +152,14 @@ export function generatePayload(
                     effect: sp.effect === 'paginate' ? 'STATIC' : sp.effect,
                     ...(sp.align && sp.align !== 'center' ? { align: sp.align } : {}),
                     ...(sp.scrollSpeed != null && sp.scrollSpeed !== 1 ? { scrollSpeed: sp.scrollSpeed } : {}),
-                    ...(sp.font ? { font: sp.font } : {}),
+                    ...(sp.font || lineFont ? { font: sp.font || lineFont } : {}),
+                    ...(sp.bold ? { bold: sp.bold } : {}),
                     durationMs: sp.durationMs,
                   })),
                   ...(line.marginTop != null && line.marginTop !== 0 ? { marginTop: line.marginTop } : {}),
                   ...(line.marginBottom != null && line.marginBottom !== 2 ? { marginBottom: line.marginBottom } : {}),
-                  ...(line.font ? { font: line.font } : {}),
+                  ...(lineFont ? { font: lineFont } : {}),
+                  ...(line.bold ? { bold: line.bold } : {}),
                   ...(line.scaleX ? { scaleX: line.scaleX } : {}),
                   ...(line.scaleY ? { scaleY: line.scaleY } : {}),
                   ...(line.spacing ? { spacing: line.spacing } : {}),
@@ -164,12 +176,12 @@ export function generatePayload(
                   effect: eff === 'paginate' ? 'STATIC' : eff,
                   ...(line.align && line.align !== 'center' ? { align: line.align } : {}),
                   ...(line.scrollSpeed != null && line.scrollSpeed !== 1 ? { scrollSpeed: line.scrollSpeed } : {}),
-                  ...(line.font ? { font: line.font } : {}),
+                  ...(lineFont ? { font: lineFont } : {}),
                   durationMs: pageDuration * 1000,
                 }],
                 ...(line.marginTop != null && line.marginTop !== 0 ? { marginTop: line.marginTop } : {}),
                 ...(line.marginBottom != null && line.marginBottom !== 2 ? { marginBottom: line.marginBottom } : {}),
-                ...(line.font ? { font: line.font } : {}),
+                ...(lineFont ? { font: lineFont } : {}),
                 ...(line.scaleX ? { scaleX: line.scaleX } : {}),
                 ...(line.scaleY ? { scaleY: line.scaleY } : {}),
                 ...(line.spacing ? { spacing: line.spacing } : {}),

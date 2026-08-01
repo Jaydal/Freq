@@ -14,6 +14,8 @@ export interface MockValues {
   queue_count: string;
   next_name: string;
   next_match: string;
+  next_wait: string;
+  next_booked_time: string;
 }
 
 export const DEFAULT_MOCK_VALUES: MockValues = {
@@ -27,6 +29,8 @@ export const DEFAULT_MOCK_VALUES: MockValues = {
   queue_count: '3',
   next_name: 'TEAM A',
   next_match: 'Next: TEAM B',
+  next_wait: '~10 min',
+  next_booked_time: '5:30\u0001PM',
 };
 
 interface Props {

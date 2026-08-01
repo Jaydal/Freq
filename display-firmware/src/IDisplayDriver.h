@@ -28,6 +28,7 @@ struct ZoneLineRender {
   uint8_t bgG = 0;
   uint8_t bgB = 0;
   String font;
+  bool bold = false;
   uint8_t scaleX = 0;
   uint8_t scaleY = 0;
   uint8_t spacing = 1;

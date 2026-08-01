@@ -15,7 +15,7 @@ interface SectionState {
   pages: ZonePage[];
 }
 
-type SectionKey = 'idle' |  'game';
+type SectionKey = 'idle' | 'game';
 
 const SECTIONS: SectionKey[] = ['idle', 'game'];
 
@@ -33,18 +33,14 @@ const DEFAULTS: string = JSON.stringify({
           },
         ],
       },
-    ],
-  },
-  prep: {
-    interval: 10,
-    pages: [
       {
         durationSeconds: 10,
+        hideIfEmpty: ["{next_match}"],
         zones: [
           {
             panelStart: 0,
             panelEnd: 2,
-            lines: [{ text: '{match_title}', color: '#00FFFF', effect: 'SCROLL' }],
+            lines: [{ text: 'UP NEXT: {next_match}', color: '#FFFF00', effect: 'SCROLL' }],
           },
         ],
       },
@@ -106,7 +102,7 @@ type ParseResult = { sections: Record<SectionKey, SectionState>; parseError: str
 function getDefaultSections(): Record<SectionKey, SectionState> {
   // Hardcoded minimal fallback — avoids calling parseSequenceRaw which could recurse
   return {
-    idle: { interval: 10, pages: [{ durationSeconds: 10, zones: [{ panelStart: 0, panelEnd: 2, lines: [{ subpages: [{ text: '{court_name}', color: '#00FF00', effect: 'STATIC', durationMs: 5000 }] }] }] }] },
+    idle: { interval: 10, pages: [{ durationSeconds: 10, zones: [{ panelStart: 0, panelEnd: 2, lines: [{ subpages: [{ text: '{court_name}', color: '#00FF00', effect: 'STATIC', durationMs: 5000 }] }] }] }, { durationSeconds: 10, hideIfEmpty: ["{next_match}"], zones: [{ panelStart: 0, panelEnd: 2, lines: [{ subpages: [{ text: 'UP NEXT: {next_match}', color: '#FFFF00', effect: 'SCROLL', durationMs: 5000 }] }] }] }] },
     game: { interval: 10, pages: [{ durationSeconds: 10, zones: [{ panelStart: 0, panelEnd: 2, lines: [{ subpages: [{ text: '{match_title}', color: '#00FFFF', effect: 'SCROLL', durationMs: 5000 }] }, { subpages: [{ text: '{timer}', color: '#FFFFFF', effect: 'STATIC', durationMs: 5000 }] }] }] }] },
   };
 }
@@ -114,10 +110,14 @@ function getDefaultSections(): Record<SectionKey, SectionState> {
 function parseSequenceRaw(raw: string): ParseResult {
   try {
     const parsed = JSON.parse(raw);
+    const defaults = JSON.parse(DEFAULTS);
     const sections: Record<SectionKey, SectionState> = {} as Record<SectionKey, SectionState>;
     for (const key of SECTIONS) {
-      const s = parsed[key];
-      if (!s) throw new Error(`Missing section: ${key}`);
+      let s = parsed[key] || parsed.sections?.[key];
+      if (!s) {
+        // Fallback to DEFAULTS if missing (e.g. older saved sequence)
+        s = defaults[key];
+      }
       const pages: ZonePage[] = (s.pages || []).map((p: any) => {
         if (p.zones) {
           return {

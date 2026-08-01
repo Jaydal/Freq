@@ -154,7 +154,7 @@ export default function QueuePanel({ courts }: Props) {
 
   useEffect(() => {
     fetchQueue();
-    const id = setInterval(fetchQueue, 5000);
+    const id = setInterval(fetchQueue, 10000);
     return () => clearInterval(id);
   }, []);
 

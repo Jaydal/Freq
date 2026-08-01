@@ -18,8 +18,8 @@ describe('textWidthPx', () => {
     expect(textWidthPx('HELLO', 2)).toBe(58); // (5*5 + 4*1) * 2
   });
 
-  it('handles spaces (space contributes SPACING width)', () => {
-    expect(textWidthPx('A B', 1)).toBe(13); // 5 + (1+1) + (1+5)
+  it('handles spaces (space is 3-wide like colon, mirroring firmware)', () => {
+    expect(textWidthPx('A B', 1)).toBe(15); // 5 + (3+1) + (1+5)
   });
 });
 

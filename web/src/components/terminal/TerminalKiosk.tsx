@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo, type ReactNode } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import mqtt from 'mqtt';
 import { TerminalLayout } from './TerminalLayout';
 import { CourtOverview } from './CourtOverview';
 import { IdleScreen } from './IdleScreen';
@@ -16,7 +15,7 @@ import { BookingSuccess } from './BookingSuccess';
 import { ErrorScreen } from './ErrorScreen';
 import type { ProductsConfig } from '@/lib/products-config-types';
 import { getCost } from '@/lib/products-config-types';
-import { fetchBoardSnapshot } from '@/app/terminal/queue/actions';
+import { fetchBoardSnapshot, cancelQueueEntry } from '@/app/terminal/queue/actions';
 import { AlertCircle, Trash2, Plus } from 'lucide-react';
 import { getRfidFormats } from '@/lib/rfid';
 
@@ -57,7 +56,18 @@ export function TerminalKiosk() {
   const [gameType, setGameType] = useState<'1v1' | '2v2' | null>(null);
   const [duration, setDuration] = useState<number | null>(null);
   const [matchTitle, setMatchTitle] = useState('');
-  const [queueEntry, setQueueEntry] = useState<any>(null);
+  
+  const [_queueEntry, _setQueueEntry] = useState<any>(null);
+  const queueEntryIdRef = useRef<string | null>(null);
+  const setQueueEntry = useCallback((entry: any | ((prev: any) => any)) => {
+    _setQueueEntry((prev: any) => {
+      const next = typeof entry === 'function' ? entry(prev) : entry;
+      queueEntryIdRef.current = next?.id || null;
+      return next;
+    });
+  }, []);
+  const queueEntry = _queueEntry;
+
   const [errorInfo, setErrorInfo] = useState<{ title: string; message: string } | null>(null);
   const [courts, setCourts] = useState<CourtOption[]>([]);
   const [testMode, setTestMode] = useState(false);
@@ -69,8 +79,9 @@ export function TerminalKiosk() {
   const [config, setConfig] = useState<ProductsConfig | null>(null);
   const rfidRef = useRef<HTMLInputElement>(null);
   const nfcScannerRef = useRef<any>(null);
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
   const successTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const stepRef = useRef<KioskStep>('idle');
 
   useEffect(() => {
     const isTest = new URLSearchParams(window.location.search).get('testmode') === 'true';
@@ -134,6 +145,10 @@ export function TerminalKiosk() {
   }, [scannedNfcUid, step]);
 
   useEffect(() => {
+    stepRef.current = step;
+  }, [step]);
+
+  useEffect(() => {
     if (step === 'success') {
       successTimer.current = setTimeout(() => reset(), SUCCESS_DELAY_MS);
       return () => { if (successTimer.current) clearTimeout(successTimer.current); };
@@ -143,28 +158,47 @@ export function TerminalKiosk() {
     }
   }, [step]);
 
-  useEffect(() => {
-    if (!queueEntry) return;
-    const channel = supabase.channel(`kiosk-${queueEntry.id}`);
-    channel.on('postgres_changes',
-      { event: '*', schema: 'public', table: 'queue_entries', filter: `id=eq.${queueEntry.id}` },
-      async (payload) => {
-        const updated = payload.new as any;
-        if (successTimer.current) clearTimeout(successTimer.current);
-        if (updated.status === 'offered') {
-          setQueueEntry((prev: any) => prev ? { ...prev, status: 'offered', expires_at: updated.expires_at, court_id: updated.court_id } : prev);
-          setStep('offer');
-        } else if (updated.status === 'completed') {
-          setQueueEntry((prev: any) => prev ? { ...prev, status: 'completed' } : prev);
-          setStep('success');
-        } else if (['expired', 'declined', 'cancelled'].includes(updated.status)) {
-          setQueueEntry((prev: any) => prev ? { ...prev, status: updated.status } : prev);
-          setStep('idle');
-        }
+  const checkQueueEntryStatus = useCallback(async (id: string) => {
+    try {
+      const { data } = await supabase
+        .from('queue_entries')
+        .select('status, expires_at, court_id, duration, party_size')
+        .eq('id', id)
+        .single();
+      if (!data) return;
+      // Only clear the success timer when a poll arrives outside the success
+      // screen — otherwise the success screen never auto-resets (Critical #4)
+      if (successTimer.current && stepRef.current !== 'success') clearTimeout(successTimer.current);
+      if (data.status === 'offered') {
+        setQueueEntry((prev: any) => prev ? { ...prev, status: 'offered', expires_at: data.expires_at, court_id: data.court_id } : prev);
+        setStep('offer');
+      } else if (data.status === 'completed') {
+        setQueueEntry((prev: any) => prev ? { ...prev, status: 'completed' } : prev);
+        if (!duration && (data as any).duration) setDuration((data as any).duration);
+        if (!gameType && (data as any).party_size) setGameType((data as any).party_size === 4 ? '2v2' : '1v1');
+        setStep('success');
+      } else if (['expired', 'declined', 'cancelled'].includes(data.status)) {
+        setQueueEntry((prev: any) => prev ? { ...prev, status: data.status } : prev);
+        setStep('idle');
       }
-    ).subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [queueEntry?.id]);
+    } catch {}
+  }, [supabase]);
+
+
+  const fetchCourts = useCallback(async () => {
+    try {
+      const snap = await fetchBoardSnapshot();
+      const nowSec = Date.now() / 1000;
+      setCourts(snap.courts.map((c: any) => {
+        const isPlayingNow = c.startTime > 0 && c.startTime <= nowSec;
+        return {
+          id: c.id,
+          name: c.name,
+          status: isPlayingNow ? 'Playing' : 'Available',
+        };
+      }));
+    } catch {}
+  }, []);
 
   useEffect(() => {
     fetchInitial();
@@ -176,37 +210,26 @@ export function TerminalKiosk() {
       if (!cancelled) await fetchCourts();
     };
     run();
-    let mqttClient: mqtt.MqttClient | null = null;
-    fetch('/api/board/config').then(r => r.json()).then(cfg => {
-      if (!cfg.enabled || cancelled) return;
-      mqttClient = mqtt.connect(cfg.url, {
-        username: cfg.username, password: cfg.password,
-        clientId: `paddle-point-kiosk-${crypto.randomUUID().slice(0, 8)}`,
-        reconnectPeriod: 5000,
-      });
-      mqttClient.on('connect', () => mqttClient!.subscribe(cfg.topic));
-      mqttClient.on('message', (_topic, payload) => {
-        if (cancelled) return;
-        try {
-          const snap = JSON.parse(payload.toString());
-          const now = Date.now() / 1000;
-          const busyIds = new Set<string>();
-          for (const c of snap.courts ?? []) {
-            if (!c.startTime) continue;
-            const prep = 0;
-            const end = c.startTime + (c.durationMin ?? 0) * 60;
-            if (now < end) busyIds.add(c.id);
+    
+    const es = new EventSource('/api/queue/events');
+    let sseDebounce: ReturnType<typeof setTimeout> | null = null;
+    es.onmessage = () => { 
+      if (!cancelled) {
+        if (sseDebounce) clearTimeout(sseDebounce);
+        sseDebounce = setTimeout(() => {
+          sseDebounce = null;
+          if (!cancelled) {
+            fetchCourts(); 
+            if (queueEntryIdRef.current) checkQueueEntryStatus(queueEntryIdRef.current);
           }
-          setCourts(snap.courts.map((c: any) => ({
-            id: c.id, name: c.name,
-            status: busyIds.has(c.id) ? 'Playing' : 'Available',
-          })));
-        } catch {}
-      });
-    }).catch(() => {});
+        }, 100);
+      }
+    };
+    es.onerror = (err) => console.error('SSE Error:', err);
+
     const poller = setInterval(() => { if (!cancelled) fetchCourts(); }, 30_000);
-    return () => { cancelled = true; clearInterval(poller); if (mqttClient) mqttClient.end(true); };
-  }, []);
+    return () => { cancelled = true; if (sseDebounce) clearTimeout(sseDebounce); clearInterval(poller); es.close(); };
+  }, [fetchCourts, checkQueueEntryStatus]);
 
   async function fetchInitial() {
     try {
@@ -244,20 +267,7 @@ export function TerminalKiosk() {
     try { return JSON.parse(json); } catch { return undefined; }
   }
 
-  async function fetchCourts() {
-    try {
-      const snap = await fetchBoardSnapshot();
-      const nowSec = Date.now() / 1000;
-      setCourts(snap.courts.map((c: any) => {
-        const isPlayingNow = c.startTime > 0 && c.startTime <= nowSec;
-        return {
-          id: c.id,
-          name: c.name,
-          status: isPlayingNow ? 'Playing' : 'Available',
-        };
-      }));
-    } catch {}
-  }
+
 
   function focusRfid() {
     setTimeout(() => rfidRef.current?.focus(), 200);
@@ -311,7 +321,7 @@ export function TerminalKiosk() {
       // Check if they are in a queue
       const { data } = await supabase
         .from('queue_entries')
-        .select('id, status, court_id, expires_at, courts!left(name)')
+        .select('id, status, court_id, expires_at, duration, party_size, courts!left(name)')
         .eq('member_id', player.id)
         .in('status', ['waiting', 'offered'])
         .order('created_at', { ascending: false })
@@ -384,8 +394,7 @@ export function TerminalKiosk() {
         setStep('success');
       } else {
         setQueueEntry(entry);
-        setStep('success');
-        successTimer.current = setTimeout(() => reset(), 3000);
+        setStep('existing-queue');
       }
     } catch {
       setErrorInfo({ title: 'Unable to Connect', message: 'Check connection and try again.' });
@@ -435,7 +444,12 @@ export function TerminalKiosk() {
   async function handleCancelQueue() {
     if (!queueEntry) return;
     try {
-      await fetch(`/api/queue/${queueEntry.id}`, { method: 'DELETE' });
+      const res = await cancelQueueEntry(queueEntry.id);
+      if (!res.ok) {
+        setErrorInfo({ title: 'Cancel Failed', message: res.error ?? 'Please try again.' });
+        setStep('error');
+        return;
+      }
     } catch {}
     reset();
   }
@@ -443,7 +457,12 @@ export function TerminalKiosk() {
   async function handleCancelExisting() {
     if (!queueEntry) return;
     try {
-      await fetch(`/api/queue/${queueEntry.id}`, { method: 'DELETE' });
+      const res = await cancelQueueEntry(queueEntry.id);
+      if (!res.ok) {
+        setErrorInfo({ title: 'Cancel Failed', message: res.error ?? 'Please try again.' });
+        setStep('error');
+        return;
+      }
     } catch {}
     setQueueEntry(null);
     setStep('select-court');

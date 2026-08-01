@@ -14,8 +14,14 @@ export async function GET(
   let display = getDisplayState(courtId);
   let gameInfo: { startTime: string; duration: number; } | null = null;
 
+  const supabase = await createClient();
+  
+  // Fetch display sequence once for both branches
+  const { data: s } = await supabase.from('settings').select('value').eq('key', 'displaySequence').single();
+  let displaySequence;
+  try { if (s?.value) displaySequence = JSON.parse(s.value); } catch {}
+
   if (!display) {
-    const supabase = await createClient();
     const { data: game } = await supabase
       .from('games')
       .select('id, match_type, match_title, status, duration, start_time, courts!inner(name)')
@@ -29,20 +35,19 @@ export async function GET(
       display = generatePayload(courtId, {
         current: { name: game.match_title ?? '', startTime: game.start_time, durationMinutes: game.duration },
         upcoming: []
-      });
+      }, { displaySequence });
       gameInfo = { startTime: game.start_time, duration: game.duration };
     }
   }
 
   if (!display) {
-    const supabase = await createClient();
     const { data: court } = await supabase
       .from('courts')
       .select('name')
       .eq('id', courtId)
       .single();
 
-    display = generatePayload(courtId, { current: null, upcoming: [] });
+    display = generatePayload(courtId, { current: null, upcoming: [] }, { courtName: court?.name, displaySequence });
   }
 
   const status = getCourtStatus(courtId);

@@ -78,7 +78,7 @@ static const uint8_t FONT_DIGITAL_5x7[][7] = {
   {0x1F, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01}, // 7
   {0x1F, 0x11, 0x11, 0x1F, 0x11, 0x11, 0x1F}, // 8
   {0x1F, 0x11, 0x11, 0x1F, 0x01, 0x01, 0x1F}, // 9
-  {0x00, 0x0C, 0x0C, 0x00, 0x0C, 0x0C, 0x00}, // :
+  {0x00, 0x18, 0x18, 0x00, 0x18, 0x18, 0x00}, // : (3-wide: dots in cols 0-1, col 2 empty for gap)
   {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}, // (space)
   {0x00, 0x00, 0x00, 0x1F, 0x00, 0x00, 0x00}, // -
 };
@@ -156,7 +156,7 @@ void Hub75Driver::showRow(uint8_t row, const char* text) {
 
   // Build a temporary single zone from the text
   _fallbackText = text;
-  int w = textWidth5x7Scaled(text, 2, 1);
+  int w = textWidth5x7Scaled(text, 2, 1, false);
   _fallbackScrollX = (w > WF2_RES_X) ? WF2_RES_X : 0;
   _fallbackScrollTick = millis();
 
@@ -174,6 +174,7 @@ void Hub75Driver::showRow(uint8_t row, const char* text) {
   z.lines[0].color = _defaultColor;
   z.lines[0].effect = (_animMode == "scroll") ? "SCROLL" : _animMode;
   z.lines[0].align = "center";
+  z.lines[0].bold = false;
   z.lines[0].scrollX = (w > WF2_RES_X) ? WF2_RES_X : 0;
   z.lines[0].scrollLastTick = millis();
   z.lines[0].scrollSpeed = 1;
@@ -239,6 +240,7 @@ void Hub75Driver::setZones(const ZoneRenderInfo* zones, uint8_t count) {
       dst.lines[li].bgG = src.lines[li].bgG;
       dst.lines[li].bgB = src.lines[li].bgB;
       dst.lines[li].font = src.lines[li].font;
+      dst.lines[li].bold = src.lines[li].bold;
       dst.lines[li].scaleX = src.lines[li].scaleX;
       dst.lines[li].scaleY = src.lines[li].scaleY;
       dst.lines[li].spacing = src.lines[li].spacing;
@@ -247,19 +249,26 @@ void Hub75Driver::setZones(const ZoneRenderInfo* zones, uint8_t count) {
         dst.lines[li].rules[r] = src.lines[li].rules[r];
       }
 
+      // Substitute timer/elapsed vars so width is based on actual rendered text, not template
       int zoneW = (src.panelEnd - src.panelStart + 1) * WF2_PANEL_W;
+      String measText = substituteTimer(src.lines[li].text);
+
       int s;
       if (dst.lines[li].scaleX > 0) {
         s = dst.lines[li].scaleX;
+      } else if (dst.lines[li].scaleY > 0) {
+        s = dst.lines[li].scaleY;
       } else if (dst.scaleX > 0) {
         s = dst.scaleX;
+      } else if (dst.scaleY > 0) {
+        s = dst.scaleY;
       } else if (src.lineCount == 2) {
-        int tw2x = (src.lines[li].font == "digital") ? textWidthDigitalScaled(src.lines[li].text.c_str(), 2, src.lines[li].spacing) : textWidth5x7Scaled(src.lines[li].text.c_str(), 2, src.lines[li].spacing);
+        int tw2x = (src.lines[li].font == "digital") ? textWidthDigitalScaled(measText.c_str(), 2, src.lines[li].spacing, src.lines[li].bold) : textWidth5x7Scaled(measText.c_str(), 2, src.lines[li].spacing, src.lines[li].bold);
         s = (tw2x <= zoneW) ? 2 : 1;
       } else {
         s = 2;
       }
-      int tw = (src.lines[li].font == "digital") ? textWidthDigitalScaled(src.lines[li].text.c_str(), s, src.lines[li].spacing) : textWidth5x7Scaled(src.lines[li].text.c_str(), s, src.lines[li].spacing);
+      int tw = (src.lines[li].font == "digital") ? textWidthDigitalScaled(measText.c_str(), s, src.lines[li].spacing, src.lines[li].bold) : textWidth5x7Scaled(measText.c_str(), s, src.lines[li].spacing, src.lines[li].bold);
       dst.lines[li].scrollX = (tw > zoneW && src.lines[li].effect == "SCROLL") ? zoneW : 0;
       dst.lines[li].scrollLastTick = millis();
     }
@@ -313,9 +322,10 @@ void Hub75Driver::update() {
       auto& line = z.lines[li];
       if (line.text.length() == 0) continue;
       int scale = line.scaleX > 0 ? line.scaleX : 
+                  (line.scaleY > 0 ? line.scaleY :
                   (z.scaleX > 0 ? z.scaleX : 
                   (z.scaleY > 0 ? z.scaleY : 
-                  ((z.lineCount == 2) ? 1 : 2)));
+                  ((z.lineCount == 2) ? 1 : 2))));
 
       // C2 fix: evaluate rules to decide effective scroll — using bool flags
       // to avoid heap-fragmenting String allocations in this high-frequency loop.
@@ -357,7 +367,8 @@ void Hub75Driver::update() {
       }
 
       if (effectiveScroll) {
-        int tw = (line.font == "digital") ? textWidthDigitalScaled(line.text.c_str(), scale, line.spacing) : textWidth5x7Scaled(line.text.c_str(), scale, line.spacing);
+        String displayText = substituteTimer(line.text);
+        int tw = (line.font == "digital") ? textWidthDigitalScaled(displayText.c_str(), scale, line.spacing, line.bold) : textWidth5x7Scaled(displayText.c_str(), scale, line.spacing, line.bold);
         if (tw <= zoneW) continue;
         float speed = line.scrollSpeed > 0.0f ? line.scrollSpeed : 1.0f;
         if (now - line.scrollLastTick >= (unsigned long)(_scrollTickMs / speed)) {
@@ -459,13 +470,19 @@ void Hub75Driver::redraw() {
         scaleXs[li] = 2;
         scaleYs[li] = 2;
       } else {
-        int tw2x = (ln.font == "digital") ? textWidthDigitalScaled(ln.text.c_str(), 2, ln.spacing) : textWidth5x7Scaled(ln.text.c_str(), 2, ln.spacing);
+        // Substitute timer variables before measuring width so {timer} scales correctly
+        String measText = substituteTimer(ln.text);
+        int tw2x = (ln.font == "digital") ? textWidthDigitalScaled(measText.c_str(), 2, ln.spacing, ln.bold) : textWidth5x7Scaled(measText.c_str(), 2, ln.spacing, ln.bold);
         scaleXs[li] = (tw2x <= zoneW) ? 2 : 1;
         scaleYs[li] = scaleXs[li];
       }
       // Override with line-level scale if present
       if (ln.scaleX > 0) scaleXs[li] = ln.scaleX;
       if (ln.scaleY > 0) scaleYs[li] = ln.scaleY;
+      
+      // Fallback: if one axis is scaled but not the other, keep them proportional
+      if (ln.scaleY == 0 && ln.scaleX > 0) scaleYs[li] = ln.scaleX;
+      if (ln.scaleX == 0 && ln.scaleY > 0) scaleXs[li] = ln.scaleY;
       
       int mt = (ln.marginTop > 0 || li > 0) ? (int)ln.marginTop : 0;
       int mb = (li < z.lineCount - 1) ? (int)ln.marginBottom : 0;
@@ -546,7 +563,7 @@ void Hub75Driver::redraw() {
       int x;
       String align = finalAlign;
 
-      int textW = (line.font == "digital") ? textWidthDigitalScaled(display.c_str(), scaleX, line.spacing) : textWidth5x7Scaled(display.c_str(), scaleX, line.spacing);
+      int textW = (line.font == "digital") ? textWidthDigitalScaled(display.c_str(), scaleX, line.spacing, line.bold) : textWidth5x7Scaled(display.c_str(), scaleX, line.spacing, line.bold);
       // C2 fix: use finalEffect (rule-overridden) for overflow/scroll decision
       bool overflows = (finalEffect == "SCROLL" && textW > zoneW);
       if (overflows) {
@@ -595,9 +612,9 @@ void Hub75Driver::redraw() {
 
       if (drawIt) {
         if (line.font == "digital") {
-          drawTextDigitalScaled(display.c_str(), x, lineY[li], finalColor, scaleX, scaleY, line.spacing, zoneX, zoneXEnd, z.borderCount, z.borderRanges);
+          drawTextDigitalScaled(display.c_str(), x, lineY[li], finalColor, scaleX, scaleY, line.spacing, zoneX, zoneXEnd, z.borderCount, z.borderRanges, line.bold);
         } else {
-          drawText5x7Scaled(display.c_str(), x, lineY[li], finalColor, scaleX, scaleY, line.spacing, zoneX, zoneXEnd, z.borderCount, z.borderRanges);
+          drawText5x7Scaled(display.c_str(), x, lineY[li], finalColor, scaleX, scaleY, line.spacing, zoneX, zoneXEnd, z.borderCount, z.borderRanges, line.bold);
         }
       }
     }
@@ -606,20 +623,59 @@ void Hub75Driver::redraw() {
   _matrix->flipDMABuffer();
 }
 
-int Hub75Driver::textWidth5x7Scaled(const char* s, int scaleX, int spacing) {
+static const uint8_t MICRO_A[5] = { 0x02, 0x05, 0x07, 0x05, 0x05 };
+static const uint8_t MICRO_P[5] = { 0x06, 0x05, 0x06, 0x04, 0x04 };
+static const uint8_t MICRO_M[5] = { 0x05, 0x07, 0x05, 0x05, 0x05 };
+
+static inline const uint8_t* getMicroGlyph(char c) {
+  if (c == 'A' || c == 'a') return MICRO_A;
+  if (c == 'P' || c == 'p') return MICRO_P;
+  if (c == 'M' || c == 'm') return MICRO_M;
+  return nullptr;
+}
+
+int Hub75Driver::textWidth5x7Scaled(const char* s, int scaleX, int spacing, bool bold) {
   int w = 0;
-  bool first = true;
+  int curScaleX = scaleX;
+  bool isSuper = false;
   for (const char* p = s; *p; p++) {
-    if (!first) w += spacing * scaleX;
-    w += CHAR_W * scaleX;
-    first = false;
+    if (*p == '\x01') { curScaleX = 1; isSuper = true; continue; }
+    int cw = (isSuper && getMicroGlyph(*p)) ? 3 : ((*p == ' ' || *p == ':') ? 3 : CHAR_W);
+    w += (cw + spacing) * curScaleX;
+    if (bold && *p != ' ' && *p != ':' && curScaleX == scaleX) w += 1 * curScaleX;
   }
+  if (w > 0) w -= spacing * curScaleX;
   return w;
 }
 
-void Hub75Driver::drawText5x7Scaled(const char* s, int x, int y, uint16_t color, int scaleX, int scaleY, int spacing, int clipXStart, int clipXEnd, uint8_t borderCount, const BorderRange* borderRanges) {
+void Hub75Driver::drawText5x7Scaled(const char* s, int x, int y, uint16_t color, int scaleX, int scaleY, int spacing, int clipXStart, int clipXEnd, uint8_t borderCount, const BorderRange* borderRanges, bool bold) {
   int cursor = x;
+  int curScaleX = scaleX;
+  int curScaleY = scaleY;
+  bool isSuper = false;
   for (const char* p = s; *p; p++) {
+    if (*p == '\x01') { curScaleX = 1; curScaleY = 1; isSuper = true; continue; }
+    const uint8_t* micro = isSuper ? getMicroGlyph(*p) : nullptr;
+    if (micro) {
+      for (int row = 0; row < 5; row++) {
+        uint8_t bits = micro[row];
+        for (int col = 0; col < 3; col++) {
+          if (bits & (1 << (2 - col))) {
+            int px = cursor + col;
+            int py = y + row;
+            bool isBorder = false;
+            for (uint8_t i = 0; i < borderCount; i++) {
+              if (py >= borderRanges[i].start && py <= borderRanges[i].end) { isBorder = true; break; }
+            }
+            if (!isBorder && px >= clipXStart && px < clipXEnd && py >= 0 && py < WF2_RES_Y) {
+              drawPixelMapped(px, py, color);
+            }
+          }
+        }
+      }
+      cursor += (3 + spacing);
+      continue;
+    }
     int idx = glyphIndex(*p);
     if (idx >= 0 && idx < (int)FONT_SIZE) {
       const uint8_t* glyph = FONT5x7[idx];
@@ -627,10 +683,10 @@ void Hub75Driver::drawText5x7Scaled(const char* s, int x, int y, uint16_t color,
         uint8_t bits = glyph[row];
         for (int col = 0; col < CHAR_W; col++) {
           if (bits & (1 << (CHAR_W - 1 - col))) {
-            for (int dy = 0; dy < scaleY; dy++) {
-              for (int dx = 0; dx < scaleX; dx++) {
-                int px = cursor + col * scaleX + dx;
-                int py = y + row * scaleY + dy;
+            for (int dy = 0; dy < curScaleY; dy++) {
+              for (int dx = 0; dx < curScaleX; dx++) {
+                int px = cursor + col * curScaleX + dx;
+                int py = y + row * curScaleY + dy;
                 
                 bool isBorder = false;
                 for (uint8_t i = 0; i < borderCount; i++) {
@@ -644,41 +700,85 @@ void Hub75Driver::drawText5x7Scaled(const char* s, int x, int y, uint16_t color,
                 if (px >= clipXStart && px < clipXEnd && py >= 0 && py < WF2_RES_Y) {
                   drawPixelMapped(px, py, color);
                 }
+                if (bold && curScaleX == scaleX) {
+                  int pxBold = px + curScaleX;
+                  if (pxBold >= clipXStart && pxBold < clipXEnd && py >= 0 && py < WF2_RES_Y) {
+                    drawPixelMapped(pxBold, py, color);
+                  }
+                }
               }
             }
           }
         }
       }
     }
-    cursor += (CHAR_W + spacing) * scaleX;
+    int cw = (*p == ' ') ? 3 : (*p == ':') ? 3 : CHAR_W;
+    cursor += (cw + spacing) * curScaleX;
+    if (bold && *p != ' ' && *p != ':' && curScaleX == scaleX) cursor += 1 * curScaleX;
   }
 }
 
-int Hub75Driver::textWidthDigitalScaled(const char* s, int scaleX, int spacing) {
+int Hub75Driver::textWidthDigitalScaled(const char* s, int scaleX, int spacing, bool bold) {
   int w = 0;
-  bool first = true;
+  int curScaleX = scaleX;
+  bool isSuper = false;
   for (const char* p = s; *p; p++) {
-    if (!first) w += spacing * scaleX;
-    w += CHAR_W * scaleX;
-    first = false;
+    if (*p == '\x01') { curScaleX = 1; isSuper = true; continue; }
+    int cw = (isSuper && getMicroGlyph(*p)) ? 3 : ((*p == ' ' || *p == ':') ? 3 : CHAR_W);
+    w += (cw + spacing) * curScaleX;
+    if (bold && *p != ' ' && *p != ':' && curScaleX == scaleX) w += 1 * curScaleX;
   }
+  if (w > 0) w -= spacing * curScaleX;
   return w;
 }
 
-void Hub75Driver::drawTextDigitalScaled(const char* s, int x, int y, uint16_t color, int scaleX, int scaleY, int spacing, int clipXStart, int clipXEnd, uint8_t borderCount, const BorderRange* borderRanges) {
+void Hub75Driver::drawTextDigitalScaled(const char* s, int x, int y, uint16_t color, int scaleX, int scaleY, int spacing, int clipXStart, int clipXEnd, uint8_t borderCount, const BorderRange* borderRanges, bool bold) {
   int cursor = x;
+  int curScaleX = scaleX;
+  int curScaleY = scaleY;
+  bool isSuper = false;
   for (const char* p = s; *p; p++) {
+    if (*p == '\x01') { curScaleX = 1; curScaleY = 1; isSuper = true; continue; }
+    const uint8_t* micro = isSuper ? getMicroGlyph(*p) : nullptr;
+    if (micro) {
+      for (int row = 0; row < 5; row++) {
+        uint8_t bits = micro[row];
+        for (int col = 0; col < 3; col++) {
+          if (bits & (1 << (2 - col))) {
+            int px = cursor + col;
+            int py = y + row;
+            bool isBorder = false;
+            for (uint8_t i = 0; i < borderCount; i++) {
+              if (py >= borderRanges[i].start && py <= borderRanges[i].end) { isBorder = true; break; }
+            }
+            if (!isBorder && px >= clipXStart && px < clipXEnd && py >= 0 && py < WF2_RES_Y) {
+              drawPixelMapped(px, py, color);
+            }
+          }
+        }
+      }
+      cursor += (3 + spacing);
+      continue;
+    }
+    const uint8_t* glyph = nullptr;
     int idx = glyphDigitalIndex(*p);
     if (idx >= 0 && idx < 13) {
-      const uint8_t* glyph = FONT_DIGITAL_5x7[idx];
+      glyph = FONT_DIGITAL_5x7[idx];
+    } else {
+      int f57Idx = glyphIndex(*p);
+      if (f57Idx >= 0 && f57Idx < (int)FONT_SIZE) {
+        glyph = FONT5x7[f57Idx];
+      }
+    }
+    if (glyph) {
       for (int row = 0; row < CHAR_H; row++) {
         uint8_t bits = glyph[row];
         for (int col = 0; col < CHAR_W; col++) {
           if (bits & (1 << (CHAR_W - 1 - col))) {
-            for (int dy = 0; dy < scaleY; dy++) {
-              for (int dx = 0; dx < scaleX; dx++) {
-                int px = cursor + col * scaleX + dx;
-                int py = y + row * scaleY + dy;
+            for (int dy = 0; dy < curScaleY; dy++) {
+              for (int dx = 0; dx < curScaleX; dx++) {
+                int px = cursor + col * curScaleX + dx;
+                int py = y + row * curScaleY + dy;
                 
                 bool isBorder = false;
                 for (uint8_t i = 0; i < borderCount; i++) {
@@ -692,13 +792,21 @@ void Hub75Driver::drawTextDigitalScaled(const char* s, int x, int y, uint16_t co
                 if (px >= clipXStart && px < clipXEnd && py >= 0 && py < WF2_RES_Y) {
                   drawPixelMapped(px, py, color);
                 }
+                if (bold && curScaleX == scaleX) {
+                  int pxBold = px + curScaleX;
+                  if (pxBold >= clipXStart && pxBold < clipXEnd && py >= 0 && py < WF2_RES_Y) {
+                    drawPixelMapped(pxBold, py, color);
+                  }
+                }
               }
             }
           }
         }
       }
     }
-    cursor += (CHAR_W + spacing) * scaleX;
+    int cw = (*p == ' ') ? 3 : (*p == ':') ? 3 : CHAR_W;
+    cursor += (cw + spacing) * curScaleX;
+    if (bold && *p != ' ' && *p != ':' && curScaleX == scaleX) cursor += 1 * curScaleX;
   }
 }
 
@@ -707,79 +815,304 @@ void Hub75Driver::drawPixelMapped(int x, int y, uint16_t color) {
   _matrix->drawPixel(x, y, color);
 }
 
-  void Hub75Driver::playBootAnimation(unsigned long durationMs) {
-    if (!_matrix) return;
-    
-    unsigned long start = millis();
-    float x = 48.0f;
-    float y = 8.0f;
-    float vx = 60.0f; // pixels per sec
-    float vy = 40.0f;
-    float r = 3.5f;
-
-    uint16_t ballColor = _matrix->color565(255, 255, 0);
-    uint16_t holeColor = _matrix->color565(0, 0, 0);
-
-    while (millis() - start < durationMs) {
-      unsigned long elapsed = millis() - start;
-      float dt = 1.0f / 60.0f;
-
-      // Phase 1: Expand (0 - 1s)
-      float currentR = r;
-      if (elapsed < 1000) {
-        currentR = r * (elapsed / 1000.0f);
-      } 
-      // Phase 2: Spin (1 - 3s)
-      else if (elapsed < 3000) {
-        // Do nothing, just stay in center
-      } 
-      // Phase 3: Bounce (3 - 8s)
-      else if (elapsed < 8000) {
-        x += vx * dt;
-        y += vy * dt;
-        if (x - currentR < 0 || x + currentR > 96) { vx = -vx; x = constrain(x, currentR, 96 - currentR); }
-        if (y - currentR < 0 || y + currentR > 16) { vy = -vy; y = constrain(y, currentR, 16 - currentR); }
-      } 
-      // Phase 4: Return to center & Text (8 - 10s)
-      else {
-        // move towards center
-        x += (48.0f - x) * 0.05f;
-        y += (8.0f - y) * 0.05f;
+void Hub75Driver::playBootAnimation(unsigned long durationMs) {
+  if (!_matrix) return;
+  
+  unsigned long start = millis();
+  unsigned long lastTime = start;
+  
+  // State variables
+  float ballX = 48.0f;
+  float ballY = 16.0f;
+  float ballAngle = 0.0f;
+  float ballVx = 0.0f;
+  float ballVy = 0.0f;
+  float ballScaleX = 1.0f;
+  float ballScaleY = 1.0f;
+  
+  float padLeftX = -20.0f;
+  float padRightX = 116.0f;
+  
+  int impactFlashFrames = 0;
+  
+  struct Particle {
+    float x, y, vx, vy;
+    uint16_t color;
+    int life, maxLife;
+    bool active;
+  };
+  Particle* particles = new Particle[150];
+  for(int i = 0; i < 150; i++) particles[i].active = false;
+  
+  auto spawnParticle = [&](float x, float y, float vx, float vy, uint16_t color, int life) {
+    for(int i = 0; i < 150; i++) {
+      if(!particles[i].active) {
+        particles[i] = {x, y, vx, vy, color, life, life, true};
+        break;
       }
-
-      _matrix->clearScreen();
-
-      // Draw ball
-      _matrix->fillCircle((int)x, (int)y, (int)currentR, ballColor);
-      
-      // Draw spinning holes
-      if (currentR > 2.0f) {
-        float angle = elapsed * 0.005f;
-        for (int i = 0; i < 4; i++) {
-          float a = angle + i * (PI / 2.0f);
-          int hx = x + cos(a) * (currentR * 0.5f);
-          int hy = y + sin(a) * (currentR * 0.5f);
-          _matrix->drawPixel(hx, hy, holeColor);
-        }
-      }
-
-      // Draw text in phase 4
-      if (elapsed > 8500) {
-        int alpha = map(elapsed, 8500, 9500, 0, 255);
-        alpha = constrain(alpha, 0, 255);
-        if (alpha > 50) {
-          int textWidth = 60; // approx width for "LED READY!" in 5x7 font
-          _matrix->setCursor(48 - (textWidth / 2), 4);
-          _matrix->setTextColor(_matrix->color565(alpha, alpha, alpha));
-          _matrix->print("LED READY!");
-        }
-      }
-
-      _matrix->flipDMABuffer();
-      delay(16); // ~60fps
     }
+  };
+  
+  struct TrailNode {
+    float x, y;
+  };
+  TrailNode trail[10];
+  int trailIdx = 0;
+  for(int i = 0; i < 10; i++) trail[i] = {ballX, ballY};
+  
+  auto hsv2rgb = [&](float h, float s, float v) -> uint16_t {
+    while(h < 0) h += 360.0f;
+    while(h >= 360.0f) h -= 360.0f;
+    int hi = (int)(h / 60.0f) % 6;
+    float f = (h / 60.0f) - hi;
+    float p = v * (1.0f - s);
+    float q = v * (1.0f - f * s);
+    float t = v * (1.0f - (1.0f - f) * s);
+    float r = 0, g = 0, b = 0;
+    switch(hi) {
+      case 0: r=v; g=t; b=p; break;
+      case 1: r=q; g=v; b=p; break;
+      case 2: r=p; g=v; b=t; break;
+      case 3: r=p; g=q; b=v; break;
+      case 4: r=t; g=p; b=v; break;
+      case 5: r=v; g=p; b=q; break;
+    }
+    return _matrix->color565((uint8_t)(r * 255), (uint8_t)(g * 255), (uint8_t)(b * 255));
+  };
+
+  uint16_t colorYellow = _matrix->color565(255, 255, 0);
+  uint16_t colorOrange = _matrix->color565(255, 128, 0);
+  uint16_t colorWhite = _matrix->color565(255, 255, 255);
+  uint16_t colorBlack = _matrix->color565(0, 0, 0);
+  uint16_t colorDark = _matrix->color565(50, 50, 50);
+  
+  auto drawPaddle = [&](float px, float py, float hue) {
+    _matrix->fillRect((int)px - 3, (int)py - 8, 7, 17, colorWhite);
+    _matrix->fillRect((int)px - 1, (int)py + 9, 3, 6, colorDark);
+    uint16_t edgeCol = hsv2rgb(hue, 1.0f, 1.0f);
+    _matrix->drawRect((int)px - 4, (int)py - 9, 9, 19, edgeCol);
+  };
+
+  while (millis() - start < durationMs) {
+    if (_otaActive) break;
+    unsigned long now = millis();
+    unsigned long elapsed = now - start;
+    float dt = (now - lastTime) / 1000.0f;
+    if (dt > 0.1f) dt = 0.1f;
+    lastTime = now;
+    
     _matrix->clearScreen();
+
+    float globalHue = fmod(elapsed * 0.2f, 360.0f);
+    bool drawBall = false;
+
+    // -- Phase 1: 0-1s --
+    if (elapsed < 1000) {
+      float progress = elapsed / 1000.0f;
+      if (progress < 0.3f) {
+        uint8_t c = (uint8_t)(sin(progress * PI / 0.3f) * 127 + 128);
+        _matrix->drawPixel(48, 8, _matrix->color565(c, c, c));
+      } else {
+        float p2 = (progress - 0.3f) / 0.7f;
+        for(int i = 0; i < 12; i++) {
+          float a = p2 * TWO_PI * 2.0f + i * (TWO_PI / 12.0f);
+          float d = 20.0f * (1.0f - p2);
+          int px = 48 + cos(a) * d;
+          int py = 8 + sin(a) * d;
+          _matrix->drawPixel(px, py, hsv2rgb(fmod(i * 30.0f, 360.0f), 1.0f, 1.0f));
+        }
+        _matrix->fillCircle(48, 8, (int)(p2 * 5.0f), _matrix->color565(255, (int)(255 * p2), 0));
+      }
+      ballX = 48.0f;
+      ballY = 8.0f;
+    }
+    // -- Phase 2: 1-3s --
+    else if (elapsed < 3000) {
+      ballAngle += 2.0f * dt;
+      drawBall = true;
+      for(int r = 8; r >= 6; r--) {
+        uint16_t glow = hsv2rgb(globalHue, 1.0f, (9 - r) * 0.2f);
+        _matrix->drawCircle(48, 8, r, glow);
+      }
+    }
+    // -- Phase 3: 3-6s --
+    else if (elapsed < 6000) {
+      if (ballVx == 0.0f && ballVy == 0.0f) {
+        ballVx = 80.0f;
+        ballVy = -30.0f;
+      }
+      ballX += ballVx * dt;
+      ballY += ballVy * dt;
+      ballAngle += 10.0f * dt;
+      
+      ballScaleX += (1.0f - ballScaleX) * 10.0f * dt;
+      ballScaleY += (1.0f - ballScaleY) * 10.0f * dt;
+
+      bool bounced = false;
+      if (ballX - 5.0f < 0) { ballX = 5.0f; ballVx = -ballVx; bounced = true; ballScaleX = 0.6f; ballScaleY = 1.4f; }
+      if (ballX + 5.0f > 95) { ballX = 95 - 5.0f; ballVx = -ballVx; bounced = true; ballScaleX = 0.6f; ballScaleY = 1.4f; }
+      if (ballY - 5.0f < 0) { ballY = 5.0f; ballVy = -ballVy; bounced = true; ballScaleX = 1.4f; ballScaleY = 0.6f; }
+      if (ballY + 5.0f > 15) { ballY = 15 - 5.0f; ballVy = -ballVy; bounced = true; ballScaleX = 1.4f; ballScaleY = 0.6f; }
+      
+      if (bounced) {
+        impactFlashFrames = 2;
+        for(int i = 0; i < 10; i++) {
+          float a = ((float)rand() / RAND_MAX) * TWO_PI;
+          float v = 20.0f + ((float)rand() / RAND_MAX) * 40.0f;
+          spawnParticle(ballX, ballY, cos(a) * v, sin(a) * v, hsv2rgb(globalHue, 1.0f, 1.0f), 10 + rand() % 10);
+        }
+      }
+      
+      trail[trailIdx] = {ballX, ballY};
+      trailIdx = (trailIdx + 1) % 10;
+      
+      for(int i = 0; i < 10; i++) {
+        int idx = (trailIdx + i) % 10;
+        float tx = trail[idx].x;
+        float ty = trail[idx].y;
+        if (tx != 48.0f || ty != 8.0f) {
+          _matrix->fillCircle((int)tx, (int)ty, 2, hsv2rgb(fmod(globalHue + i * 20.0f, 360.0f), 1.0f, (i + 1) * 0.1f));
+        }
+      }
+      
+      if (elapsed > 5000) {
+        float ease = (6000 - elapsed) / 1000.0f;
+        ballVx = (48.0f - ballX) * (1.0f - ease) * 3.0f;
+        ballVy = (8.0f - ballY) * (1.0f - ease) * 3.0f;
+      }
+      drawBall = true;
+    }
+    // -- Phase 4: 6-8s --
+    else if (elapsed < 8000) {
+      ballX += (48.0f - ballX) * 10.0f * dt;
+      ballY += (8.0f - ballY) * 10.0f * dt;
+      ballVx = 0; ballVy = 0;
+      ballScaleX = 1.0f; ballScaleY = 1.0f;
+      ballAngle += 20.0f * dt;
+      
+      float ease = min(1.0f, (elapsed - 6000) / 1500.0f);
+      padLeftX = -20.0f + ease * 50.0f; 
+      padRightX = 116.0f - ease * 50.0f;
+      
+      drawPaddle(padLeftX, 8.0f, globalHue);
+      drawPaddle(padRightX, 8.0f, globalHue + 180.0f);
+      drawBall = true;
+    }
+    // -- Phase 5: 8-9s --
+    else if (elapsed < 9000) {
+      float progress = (elapsed - 8000) / 1000.0f;
+      ballAngle += 40.0f * dt;
+      
+      if (progress < 0.1f) {
+        padLeftX += (39.0f - padLeftX) * 30.0f * dt;
+        padRightX += (57.0f - padRightX) * 30.0f * dt;
+        if (elapsed - 8000 < 20) {
+          impactFlashFrames = 3;
+          for(int i = 0; i < 150; i++) {
+            float a = ((float)rand() / RAND_MAX) * TWO_PI;
+            float v = 40.0f + ((float)rand() / RAND_MAX) * 80.0f;
+            spawnParticle(48.0f, 8.0f, cos(a) * v, sin(a) * v, hsv2rgb((float)(rand() % 360), 1.0f, 1.0f), 20 + rand() % 20);
+          }
+        }
+      } else {
+        padLeftX += (25.0f - padLeftX) * 5.0f * dt;
+        padRightX += (71.0f - padRightX) * 5.0f * dt;
+      }
+      
+      drawPaddle(padLeftX, 8.0f, globalHue);
+      drawPaddle(padRightX, 8.0f, globalHue + 180.0f);
+      drawBall = true;
+    }
+    // -- Phase 6: 9-10s --
+    else {
+      ballAngle += 5.0f * dt;
+      drawPaddle(padLeftX, 8.0f, globalHue);
+      drawPaddle(padRightX, 8.0f, globalHue + 180.0f);
+      drawBall = true;
+      
+      float progress = (elapsed - 9000) / 1000.0f;
+      int alpha = (int)(progress * 255.0f);
+      if (alpha > 255) alpha = 255;
+      
+      if (alpha > 50) {
+        int textWidth = 12 * 6; // "PADDLE POINT" is 12 chars, 6px each
+        _matrix->setCursor(48 - (textWidth / 2), 1); // Put at top to avoid paddles
+        _matrix->setTextColor(_matrix->color565(alpha, alpha, alpha));
+        _matrix->print("PADDLE POINT");
+      }
+    }
+
+    // Process and draw particles
+    for(int i = 0; i < 150; i++) {
+      if (particles[i].active) {
+        particles[i].x += particles[i].vx * dt;
+        particles[i].y += particles[i].vy * dt;
+        particles[i].life--;
+        if (particles[i].life <= 0 || particles[i].x < 0 || particles[i].x > 95 || particles[i].y < 0 || particles[i].y > 15) {
+          particles[i].active = false;
+        } else {
+          float fade = (float)particles[i].life / particles[i].maxLife;
+          uint16_t c = particles[i].color;
+          uint8_t r = (uint8_t)(((c >> 11) & 0x1F) * 8 * fade);
+          uint8_t g = (uint8_t)(((c >> 5) & 0x3F) * 4 * fade);
+          uint8_t b = (uint8_t)((c & 0x1F) * 8 * fade);
+          _matrix->drawPixel((int)particles[i].x, (int)particles[i].y, _matrix->color565(r, g, b));
+        }
+      }
+    }
+
+    // Draw Pickleball (reverse mapping for no holes with scaling)
+    if (drawBall) {
+      int maxR = 6;
+      for (int dy = -maxR; dy <= maxR; dy++) {
+        for (int dx = -maxR; dx <= maxR; dx++) {
+          float tx = dx;
+          float ty = dy;
+          
+          float ux = tx * cos(-ballAngle) - ty * sin(-ballAngle);
+          float uy = tx * sin(-ballAngle) + ty * cos(-ballAngle);
+          
+          float sx = ux / ballScaleX;
+          float sy = uy / ballScaleY;
+          
+          float srcX = sx * cos(ballAngle) - sy * sin(ballAngle);
+          float srcY = sx * sin(ballAngle) + sy * cos(ballAngle);
+          
+          float distSq = srcX * srcX + srcY * srcY;
+          if (distSq <= 25.0f) {
+            int isrcX = (int)round(srcX);
+            int isrcY = (int)round(srcY);
+            
+            uint16_t c = colorYellow;
+            if (distSq >= 16.0f) {
+              c = colorOrange;
+            } else if (isrcX == -2 && isrcY == -2) {
+              c = colorWhite;
+            } else if ((isrcX == 0 && isrcY == -2) || (isrcX == -2 && isrcY == 2) || (isrcX == 2 && isrcY == 1)) {
+              c = colorBlack;
+            }
+            
+            int px = (int)ballX + dx;
+            int py = (int)ballY + dy;
+            if (px >= 0 && px < 96 && py >= 0 && py < 16) {
+              _matrix->drawPixel(px, py, c);
+            }
+          }
+        }
+      }
+    }
+    
+    // Impact flash full screen overlay (disabled per request)
+    // if (impactFlashFrames > 0) {
+    //   _matrix->fillRect(0, 0, 96, 32, colorWhite);
+    //   impactFlashFrames--;
+    // }
+
     _matrix->flipDMABuffer();
+    delay(16);
   }
+  
+  delete[] particles;
+}
 
 #endif

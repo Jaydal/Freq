@@ -342,6 +342,7 @@ void MqttDisplayClient::applyCurrentPage() {
       rz[zi].lines[li].effect = sp.effect.c_str();
       rz[zi].lines[li].align = sp.align.c_str();
       rz[zi].lines[li].font = sp.font.c_str();
+      rz[zi].lines[li].bold = sp.bold;
       rz[zi].lines[li].scrollSpeed = sp.scrollSpeed;
       rz[zi].lines[li].marginTop = srcLine.marginTop;
       rz[zi].lines[li].marginBottom = srcLine.marginBottom;
@@ -372,6 +373,11 @@ void MqttDisplayClient::connectWiFi() {
   }
 
   log_i("[health] Connecting WiFi: %s", _ssid.c_str());
+  
+  String msg = "WIFI CONNECTING...";
+  _driver.showRow(0, msg.c_str());
+  _driver.update();
+
   WiFi.mode(WIFI_STA);
   WiFi.begin(_ssid.c_str(), _password.c_str());
   unsigned long start = millis();
@@ -403,6 +409,9 @@ bool MqttDisplayClient::connectMqtt() {
   if (_mqtt.connected()) return true;
 
   log_i("[health] Connecting MQTT...");
+  _driver.showRow(0, "MQTT CONNECTING...");
+  _driver.update();
+
   String clientId = "freq-led-" + String(ESP.getEfuseMac(), HEX);
 
   if (_mqtt.connect(clientId.c_str(), _mqttUser.c_str(), _mqttPass.c_str(),
@@ -674,6 +683,7 @@ void MqttDisplayClient::handleMessage(uint8_t* payload, unsigned int len) {
                   sp.color = spv["color"].as<std::string>();
                   sp.bgColor = spv["bgColor"].is<std::string>() ? spv["bgColor"].as<std::string>() : "";
                   sp.font = spv["font"].is<std::string>() ? spv["font"].as<std::string>() : "";
+                  sp.bold = spv["bold"].is<bool>() ? spv["bold"].as<bool>() : false;
                   sp.effect = spv["effect"].is<std::string>() ? spv["effect"].as<std::string>() : "SCROLL";
                   sp.align = spv["align"].is<std::string>() ? spv["align"].as<std::string>() : "center";
                   sp.scrollSpeed = spv["scrollSpeed"].is<float>() ? spv["scrollSpeed"].as<float>() : 1.0f;
@@ -687,6 +697,7 @@ void MqttDisplayClient::handleMessage(uint8_t* payload, unsigned int len) {
                 sp.color = line["color"].is<std::string>() ? line["color"].as<std::string>() : "#FFFFFF";
                 sp.bgColor = line["bgColor"].is<std::string>() ? line["bgColor"].as<std::string>() : "";
                 sp.font = line["font"].is<std::string>() ? line["font"].as<std::string>() : "";
+                sp.bold = line["bold"].is<bool>() ? line["bold"].as<bool>() : false;
                 sp.effect = line["effect"].is<std::string>() ? line["effect"].as<std::string>() : "SCROLL";
                 sp.align = line["align"].is<std::string>() ? line["align"].as<std::string>() : "center";
                 sp.scrollSpeed = line["scrollSpeed"].is<float>() ? line["scrollSpeed"].as<float>() : 1.0f;
@@ -698,6 +709,8 @@ void MqttDisplayClient::handleMessage(uint8_t* payload, unsigned int len) {
               
               if (!line["font"].isNull()) {
                 zl.font = line["font"].as<std::string>();
+              } else if (line["subpages"].is<JsonArray>() && line["subpages"].size() > 0 && !line["subpages"][0]["font"].isNull()) {
+                zl.font = line["subpages"][0]["font"].as<std::string>();
               } else {
                 zl.font = "default";
               }

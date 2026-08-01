@@ -314,6 +314,18 @@ export function ZonePanel({ zone, zoneIndex, onChange, onDelete }: Props) {
                     </SelectContent>
                   </Select>
                 </div>
+                <div className="space-y-1 flex items-center justify-center mt-6">
+                  <Label className="text-xs text-zinc-500 mr-2 cursor-pointer" htmlFor={`bold-${li}-${spi}`}>Bold</Label>
+                  <input type="checkbox" id={`bold-${li}-${spi}`}
+                    checked={sp.bold ?? false}
+                    onChange={e => {
+                      const subs = [...(zone.lines[li].subpages ?? [])];
+                      subs[spi] = { ...subs[spi], bold: e.target.checked };
+                      updateLine(li, subs);
+                    }}
+                    className="w-4 h-4 rounded border-zinc-700 bg-zinc-950 text-indigo-500"
+                  />
+                </div>
                 <div className="space-y-1 flex-1">
                   <Label className="text-xs text-zinc-500">Effect</Label>
                   <Select value={sp.effect}
@@ -448,11 +460,11 @@ export function ZonePanel({ zone, zoneIndex, onChange, onDelete }: Props) {
               <Label className="text-xs text-zinc-500">Font Size (W / H)</Label>
               <div className="flex items-center gap-2">
                 <Input
-                  type="number" min={1} max={4}
+                  type="number" min={1} max={8}
                   value={line.scaleX ?? zone.scaleX ?? (zone.lines.length === 2 ? 1 : 2)}
                   onChange={e => {
                     const lines = zone.lines.map((l, i) =>
-                      i === li ? { ...l, scaleX: Math.max(1, Math.min(4, Number(e.target.value))) } : l
+                      i === li ? { ...l, scaleX: Math.max(1, Math.min(8, Number(e.target.value))) } : l
                     );
                     onChange({ ...zone, lines });
                   }}
@@ -460,11 +472,11 @@ export function ZonePanel({ zone, zoneIndex, onChange, onDelete }: Props) {
                 />
                 <span className="text-xs text-zinc-600">x</span>
                 <Input
-                  type="number" min={1} max={4}
+                  type="number" min={1} max={8}
                   value={line.scaleY ?? zone.scaleY ?? (zone.lines.length === 2 ? 1 : 2)}
                   onChange={e => {
                     const lines = zone.lines.map((l, i) =>
-                      i === li ? { ...l, scaleY: Math.max(1, Math.min(4, Number(e.target.value))) } : l
+                      i === li ? { ...l, scaleY: Math.max(1, Math.min(8, Number(e.target.value))) } : l
                     );
                     onChange({ ...zone, lines });
                   }}

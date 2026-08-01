@@ -99,7 +99,6 @@ void setup() {
   
   // Play the premium 10-second pickleball boot animation
   g_display->playBootAnimation(10000);
-
   // ── Boot branching: portal vs normal ──────────────────────────────────────
   if (!g_portal.isConfigured()) {
     log_i("[main] No saved settings -> starting config portal");

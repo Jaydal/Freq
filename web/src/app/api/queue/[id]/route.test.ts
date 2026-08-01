@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const mockSupabaseResult = vi.hoisted(() => ({ data: null as any, error: null as any }));
-const mockPublishDisplay = vi.hoisted(() => vi.fn());
+const mockPublishAllDisplays = vi.hoisted(() => vi.fn().mockResolvedValue({ ok: true, failed: 0, total: 0 }));
 const mockFrom = vi.hoisted(() => vi.fn(() => {
   const chain: any = {
     select: vi.fn(() => chain),
@@ -21,8 +21,8 @@ vi.mock('@/lib/supabase/server', () => ({
   createClient: vi.fn(() => ({ from: mockFrom })),
 }));
 
-vi.mock('@/lib/mqtt', () => ({
-  publishDisplay: (...args: any[]) => mockPublishDisplay(...args),
+vi.mock('@/lib/display/publish-all', () => ({
+  publishAllDisplays: (...args: any[]) => mockPublishAllDisplays(...args),
 }));
 
 import { DELETE, PATCH } from './route';
@@ -49,6 +49,7 @@ describe('DELETE /api/queue/[id]', () => {
     const res = await DELETE(authed('http://localhost'), params('g1'));
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
+    expect(mockPublishAllDisplays).toHaveBeenCalled();
   });
 
   it('returns 404 when game is not found', async () => {
@@ -56,6 +57,7 @@ describe('DELETE /api/queue/[id]', () => {
 
     const res = await DELETE(authed('http://localhost'), params('missing'));
     expect(res.status).toBe(404);
+    expect(mockPublishAllDisplays).not.toHaveBeenCalled();
   });
 
   it('returns 404 when game is not in Scheduled status', async () => {
@@ -73,16 +75,12 @@ describe('PATCH /api/queue/[id]', () => {
     mockSupabaseResult.error = null;
   });
 
-  it('promotes game to In Progress and calls publishDisplay', async () => {
+  it('promotes game to In Progress and republishes all displays', async () => {
     mockSupabaseResult.data = fakeGame;
-    mockPublishDisplay.mockResolvedValue(undefined);
 
     const res = await PATCH(authed('http://localhost'), params('g1'));
     expect(res.status).toBe(200);
-    expect(mockPublishDisplay).toHaveBeenCalledWith('court-1', expect.objectContaining({
-      action: 'QUEUE_UPDATE',
-      state: 'PLAYING',
-    }));
+    expect(mockPublishAllDisplays).toHaveBeenCalled();
   });
 
   it('extracts court number from court name correctly', async () => {
@@ -90,13 +88,9 @@ describe('PATCH /api/queue/[id]', () => {
       ...fakeGame,
       courts: { ...fakeCourt, name: 'Court 3' },
     };
-    mockPublishDisplay.mockResolvedValue(undefined);
 
     await PATCH(authed('http://localhost'), params('g1'));
-    expect(mockPublishDisplay).toHaveBeenCalledWith('court-1', expect.objectContaining({
-      action: 'QUEUE_UPDATE',
-      state: 'PLAYING',
-    }));
+    expect(mockPublishAllDisplays).toHaveBeenCalled();
   });
 
   it('returns 404 when game does not exist', async () => {
@@ -104,5 +98,6 @@ describe('PATCH /api/queue/[id]', () => {
 
     const res = await PATCH(authed('http://localhost'), params('bad'));
     expect(res.status).toBe(404);
+    expect(mockPublishAllDisplays).not.toHaveBeenCalled();
   });
 });

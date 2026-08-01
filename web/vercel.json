@@ -7,11 +7,5 @@
     "deploymentEnabled": {
       "main": true
     }
-  },
-  "crons": [
-    {
-      "path": "/api/display/publish-all",
-      "schedule": "* * * * *"
-    }
-  ]
+  }
 }

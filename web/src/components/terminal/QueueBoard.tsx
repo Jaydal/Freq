@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { createClient } from '@/lib/supabase/client';
 import { CourtStatusCard, type CourtStatusData } from './CourtStatusCard';
 import { NowServingCard } from './NowServingCard';
 import { QueueList, type QueueEntryDisplay } from './QueueList';
@@ -10,7 +9,6 @@ import type { BoardSnapshot } from '@/lib/queue/board-snapshot';
 
 export function QueueBoard() {
   const [snapshot, setSnapshot] = useState<BoardSnapshot | null>(null);
-  const supabase = createClient();
 
   const fetchInitial = useCallback(async () => {
     try {
@@ -23,31 +21,23 @@ export function QueueBoard() {
 
   useEffect(() => {
     fetchInitial();
-    const intervalId = setInterval(fetchInitial, 10000);
-    return () => clearInterval(intervalId);
+
+    const es = new EventSource('/api/queue/events');
+    let sseDebounce: ReturnType<typeof setTimeout> | null = null;
+    es.onmessage = () => { 
+      if (sseDebounce) clearTimeout(sseDebounce);
+      sseDebounce = setTimeout(() => {
+        sseDebounce = null;
+        fetchInitial();
+      }, 100);
+    };
+    es.onerror = (err) => console.error('SSE Error:', err);
+
+    return () => {
+      es.close();
+      if (sseDebounce) clearTimeout(sseDebounce);
+    };
   }, [fetchInitial]);
-
-  useEffect(() => {
-    const channel = supabase.channel('queue-board');
-
-    channel.on('postgres_changes',
-      { event: '*', schema: 'public', table: 'games' },
-      () => fetchInitial()
-    );
-
-    channel.on('postgres_changes',
-      { event: '*', schema: 'public', table: 'queue_entries' },
-      () => fetchInitial()
-    );
-
-    channel.on('postgres_changes',
-      { event: '*', schema: 'public', table: 'courts' },
-      () => fetchInitial()
-    );
-
-    channel.subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [fetchInitial, supabase]);
 
   if (!snapshot) {
     return <div className="min-h-screen bg-black flex items-center justify-center text-white">Loading...</div>;

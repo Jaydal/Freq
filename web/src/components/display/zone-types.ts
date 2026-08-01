@@ -16,6 +16,7 @@ export interface SubPage {
   scrollSpeed?: number;
   durationMs: number;
   font?: string;
+  bold?: boolean;
 }
 
 export interface DisplayLine {
@@ -24,6 +25,7 @@ export interface DisplayLine {
   color?: string;
   bgColor?: string;
   font?: string;
+  bold?: boolean;
   effect?: 'SCROLL' | 'STATIC' | 'BLINK' | 'paginate';
   align?: 'left' | 'center' | 'right';
   scrollSpeed?: number;

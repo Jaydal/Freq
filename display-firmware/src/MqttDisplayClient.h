@@ -17,6 +17,7 @@ struct SubPage {
   float scrollSpeed;
   uint16_t durationMs;
   std::string font;
+  bool bold = false;
 };
 
 struct ZoneLine {
@@ -24,6 +25,7 @@ struct ZoneLine {
   uint8_t marginTop;
   uint8_t marginBottom;
   std::string font;
+  bool bold = false;
   uint8_t scaleX;
   uint8_t scaleY;
   uint8_t spacing;

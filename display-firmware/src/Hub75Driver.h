@@ -57,6 +57,7 @@ private:
       uint8_t bgG;
       uint8_t bgB;
       String font;
+      bool bold;
       uint8_t scaleX;
       uint8_t scaleY;
       uint8_t spacing;
@@ -96,10 +97,10 @@ private:
 
   String substituteTimer(const String& text) const;
   void redraw();
-  void drawText5x7Scaled(const char* s, int x, int y, uint16_t color, int scaleX, int scaleY, int spacing, int clipXStart, int clipXEnd, uint8_t borderCount, const BorderRange* borderRanges);
-  int  textWidth5x7Scaled(const char* s, int scaleX, int spacing);
-  int textWidthDigitalScaled(const char* s, int scaleX, int spacing);
-  void drawTextDigitalScaled(const char* s, int x, int y, uint16_t color, int scaleX, int scaleY, int spacing, int clipXStart, int clipXEnd, uint8_t borderCount, const BorderRange* borderRanges);
+  void drawText5x7Scaled(const char* s, int x, int y, uint16_t color, int scaleX, int scaleY, int spacing, int clipXStart, int clipXEnd, uint8_t borderCount, const BorderRange* borderRanges, bool bold);
+  int  textWidth5x7Scaled(const char* s, int scaleX, int spacing, bool bold);
+  int textWidthDigitalScaled(const char* s, int scaleX, int spacing, bool bold);
+  void drawTextDigitalScaled(const char* s, int x, int y, uint16_t color, int scaleX, int scaleY, int spacing, int clipXStart, int clipXEnd, uint8_t borderCount, const BorderRange* borderRanges, bool bold);
   void drawPixelMapped(int x, int y, uint16_t color);
 };
 

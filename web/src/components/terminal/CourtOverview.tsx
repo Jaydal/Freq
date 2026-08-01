@@ -1,7 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { createClient } from '@/lib/supabase/client';
+import { useState, useEffect, useCallback } from 'react';
 import { isActiveNow } from './CourtStatusCard';
 import { fetchBoardSnapshot } from '@/app/terminal/queue/actions';
 
@@ -51,9 +50,7 @@ function CourtOverviewItem({ court }: { court: CourtState }) {
 
 export function CourtOverview() {
   const [courts, setCourts] = useState<CourtState[]>([]);
-  const supabase = createClient();
-
-  async function fetchAll() {
+  const fetchAll = useCallback(async () => {
     try {
       const snap = await fetchBoardSnapshot();
       const nowSec = Math.floor(Date.now() / 1000);
@@ -71,30 +68,27 @@ export function CourtOverview() {
     } catch (e) {
       console.error(e);
     }
-  }
+  }, []);
 
   useEffect(() => {
     fetchAll();
 
     const es = new EventSource('/api/queue/events');
-    es.onmessage = () => { fetchAll(); };
-    es.onerror = () => es.close();
+    let sseDebounce: ReturnType<typeof setTimeout> | null = null;
+    es.onmessage = () => { 
+      if (sseDebounce) clearTimeout(sseDebounce);
+      sseDebounce = setTimeout(() => {
+        sseDebounce = null;
+        fetchAll();
+      }, 100);
+    };
+    es.onerror = (err) => console.error('SSE Error:', err);
 
-    const channel = supabase.channel('court-overview');
-    channel.on('postgres_changes',
-      { event: '*', schema: 'public', table: 'games' },
-      () => fetchAll()
-    );
-    channel.on('postgres_changes',
-      { event: '*', schema: 'public', table: 'courts' },
-      () => fetchAll()
-    );
-    channel.subscribe();
     return () => {
       es.close();
-      supabase.removeChannel(channel);
+      if (sseDebounce) clearTimeout(sseDebounce);
     };
-  }, [supabase]);
+  }, [fetchAll]);
 
   return (
     <div className="h-full flex flex-col p-3 gap-1.5 bg-zinc-950">

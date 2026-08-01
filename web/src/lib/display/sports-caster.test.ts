@@ -7,9 +7,10 @@ describe('Sports Caster Payload Generator', () => {
     
     expect(payload.courtId).toBe('court-1');
     expect(payload.state).toBe('OPEN');
-    // Default idle sequence: court_name, queue_count
+    // Default idle sequence: {court_name} plus an "UP NEXT" page that is
+    // hidden when there is no next match (hideIfEmpty)
+    expect(payload.blocks[0].pages.length).toBe(1);
     expect(payload.blocks[0].pages[0].text).toContain('court-1');
-    expect(payload.blocks[0].pages[1].text).toContain('0 IN QUEUE');
     expect(payload.serverTime).toBeGreaterThan(1700000000);
   });
 
@@ -20,10 +21,10 @@ describe('Sports Caster Payload Generator', () => {
     });
     
     expect(payload.state).toBe('PLAYING');
-    // Default game sequence: match_info, {timer} LEFT, queue_count
+    // Default game sequence: match_info and {timer} (countdown is client-side)
+    expect(payload.blocks[0].pages.length).toBe(2);
     expect(payload.blocks[0].pages[0].text).toBe('Jane vs John');
-    expect(payload.blocks[0].pages[1].text).toBe('{timer} LEFT');
-    expect(payload.blocks[0].pages[2].text).toContain('0 IN QUEUE');
+    expect(payload.blocks[0].pages[1].text).toBe('{timer}');
   });
 
   it('includes serverTime and schedule metadata', () => {
@@ -43,7 +44,6 @@ describe('Sports Caster Payload Generator', () => {
     });
     
     expect(payload.blocks[0].pages[0].text).toContain('Court A');
-    expect(payload.blocks[0].pages[1].text).toContain('5 IN QUEUE');
   });
 
   it('passes through new per-line fields in zone payloads', () => {

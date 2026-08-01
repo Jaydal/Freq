@@ -45,7 +45,7 @@ export default function VirtualDisplaysPage() {
     };
 
     fetchDisplay();
-    const id = setInterval(fetchDisplay, 2000);
+    const id = setInterval(fetchDisplay, 5000);
     return () => clearInterval(id);
   }, [selected, viewerId]);
 
