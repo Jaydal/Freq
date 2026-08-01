@@ -27,7 +27,7 @@ function calcCharge(rates: Record<string, number>, duration: number, partySize: 
   return cost;
 }
 
-async function deductWallet(memberId: string, amount: number, gameId: string): Promise<void> {
+export async function deductWallet(memberId: string, amount: number, gameId: string): Promise<string | null> {
   const supabase = await createClient();
   const { data: wallet } = await supabase
     .from('wallets')
@@ -46,20 +46,46 @@ async function deductWallet(memberId: string, amount: number, gameId: string): P
     .single();
   if (!updated) throw new Error('Concurrent wallet update, try again');
 
-  await supabase.from('wallet_transactions').insert({
-    wallet_id: wallet.id,
-    amount: -amount,
-    type: 'game_fee',
-    reference_number: gameId,
-  });
+  const { data: tx } = await supabase
+    .from('wallet_transactions')
+    .insert({
+      wallet_id: wallet.id,
+      amount: -amount,
+      type: 'game_fee',
+      reference_number: gameId,
+    })
+    .select('id')
+    .single();
+  return tx?.id ?? null;
 }
 
-async function refundWallet(memberId: string, amount: number, gameId: string, remarks: string): Promise<void> {
+// Refund a specific wallet transaction (credit balance + log a Refund row).
+// Idempotent: a Refund row with reference_number `refund-<txId>` can only exist once.
+export async function refundTransaction(txId: string, remarks: string): Promise<void> {
   const supabase = await createClient();
+  const { data: tx } = await supabase
+    .from('wallet_transactions')
+    .select('id, wallet_id, amount')
+    .eq('id', txId)
+    .single();
+  if (!tx) return;
+
+  const amount = Math.abs(Number(tx.amount));
+  if (!amount || amount <= 0) return;
+
+  const ref = `refund-${tx.id}`;
+  const { data: existing } = await supabase
+    .from('wallet_transactions')
+    .select('id')
+    .eq('type', 'Refund')
+    .eq('reference_number', ref)
+    .limit(1);
+  if (existing && existing.length > 0) return;
+
   const { data: wallet } = await supabase
     .from('wallets')
     .select('id, balance')
-    .eq('member_id', memberId)
+    .eq('id', tx.wallet_id)
     .single();
   if (!wallet) return;
 
@@ -76,7 +102,7 @@ async function refundWallet(memberId: string, amount: number, gameId: string, re
     wallet_id: wallet.id,
     amount,
     type: 'Refund',
-    reference_number: gameId,
+    reference_number: ref,
     remarks,
   });
 }
@@ -181,7 +207,8 @@ export async function joinQueue(params: JoinQueueParams): Promise<QueueEntry> {
   if (params.matchTitle) insertData.match_title = params.matchTitle;
 
   // Deduct wallet upfront for joining the queue
-  await deductWallet(params.memberId, charge, "QUEUE_DEPOSIT_" + Date.now().toString());
+  const depositTxId = await deductWallet(params.memberId, charge, "QUEUE_DEPOSIT_" + Date.now().toString());
+  if (depositTxId) insertData.deposit_tx_id = depositTxId;
 
   const { data: entry, error } = await supabase
     .from('queue_entries')
@@ -190,8 +217,8 @@ export async function joinQueue(params: JoinQueueParams): Promise<QueueEntry> {
     .single();
   
   if (error) {
-    // Refund if insertion failed
-    await refundWallet(params.memberId, charge, "QUEUE_DEPOSIT_" + Date.now().toString(), "Queue join failed");
+    // Refund the deposit if insertion failed
+    if (depositTxId) await refundTransaction(depositTxId, 'Queue join failed');
     throw new Error(error.message);
   }
 
@@ -203,11 +230,26 @@ export async function joinQueue(params: JoinQueueParams): Promise<QueueEntry> {
 
 export async function leaveQueue(entryId: string): Promise<void> {
   const supabase = await createClient();
+  const { data: entry } = await supabase
+    .from('queue_entries')
+    .select('id, deposit_tx_id, court_id')
+    .eq('id', entryId)
+    .single();
+  if (!entry) return;
+
+  if (entry.deposit_tx_id) {
+    await refundTransaction(entry.deposit_tx_id, 'Queue entry cancelled');
+  }
+
   await supabase
     .from('queue_entries')
     .update({ status: 'cancelled', updated_at: new Date().toISOString() })
     .eq('id', entryId);
-  publishAllDisplays().catch(console.error);
+
+  if (entry.court_id) {
+    await processCourtQueue(entry.court_id);
+  }
+  await publishAllDisplays();
 }
 
 export async function getQueuePosition(entryId: string): Promise<number> {

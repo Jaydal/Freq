@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { publishBoardOnce } from '@/lib/queue/board-publisher';
 import { processCourtQueue } from '@/lib/queue/queue-processor';
 import { publishAllDisplays } from '@/lib/display/publish-all';
+import { deductWallet, refundTransaction } from '@/lib/queue/queue-service';
 
 export async function updateCourt(courtId: string, name: string, newId?: string) {
   const supabase = await createClient();
@@ -37,31 +38,23 @@ export async function endGame(gameId: string, courtId: string, refund: boolean =
     .update({ status: 'Completed', end_time: now })
     .eq('id', gameId);
 
-  if (refund && game.charge_amount) {
-    const primaryMemberId = (game.game_players ?? [])[0]?.member_id;
-    if (primaryMemberId) {
-      const amount = Number(game.charge_amount);
-      const { data: wallet } = await supabase
-        .from('wallets')
-        .select('id, balance')
-        .eq('member_id', primaryMemberId)
-        .single();
-      if (wallet) {
-        const { data: updated } = await supabase
-          .from('wallets')
-          .update({ balance: wallet.balance + amount })
-          .eq('id', wallet.id)
-          .eq('balance', wallet.balance)
-          .select()
-          .single();
-        if (!updated) throw new Error('Concurrent wallet update, try again');
-        await supabase.from('wallet_transactions').insert({
-          wallet_id: wallet.id,
-          amount,
-          type: 'Refund',
-          reference_number: gameId,
-          remarks: 'Game ended early — refund',
-        });
+  if (refund && game.id) {
+    // Refund each payer via their own wallet transaction for this game
+    const { data: txs } = await supabase
+      .from('wallet_transactions')
+      .select('id')
+      .eq('reference_number', game.id)
+      .in('type', ['game_fee', 'Game Charge']);
+    if (txs && txs.length > 0) {
+      for (const tx of txs) {
+        await refundTransaction(tx.id, 'Game ended early — refund');
+      }
+    } else if (game.charge_amount && Number(game.charge_amount) > 0) {
+      // Legacy fallback: games charged before per-game references — refund the
+      // full amount to the first payer as before.
+      const primaryMemberId = (game.game_players ?? [])[0]?.member_id;
+      if (primaryMemberId) {
+        await deductWallet(primaryMemberId, -Number(game.charge_amount), game.id);
       }
     }
   }

@@ -119,6 +119,13 @@ export async function processCourtQueue(courtId: string): Promise<boolean> {
       continue;
     }
 
+    // Retarget the join deposit to this game so per-payer refunds can find it
+    if (entry.deposit_tx_id) {
+      await supabase.from('wallet_transactions')
+        .update({ reference_number: game.id, remarks: 'Deposit converted to game fee' })
+        .eq('id', entry.deposit_tx_id);
+    }
+
     const playerIds: string[] = typeof entry.player_ids === 'string'
       ? JSON.parse(entry.player_ids)
       : (entry.player_ids ?? [entry.member_id]);

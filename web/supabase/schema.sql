@@ -181,8 +181,8 @@ BEGIN
     UPDATE wallets SET balance = balance - v_charge, updated_at = NOW()
     WHERE id = v_wallet.id;
 
-    INSERT INTO wallet_transactions (wallet_id, amount, type, remarks)
-    VALUES (v_wallet.id, v_charge, 'Game Charge',
+    INSERT INTO wallet_transactions (wallet_id, amount, type, reference_number, remarks)
+    VALUES (v_wallet.id, v_charge, 'Game Charge', v_game_id,
       format('Match %s for %s mins on %s', p_match_type, p_duration, p_court_name));
 
     INSERT INTO game_players (game_id, member_id, rfid_card_id, team)
@@ -262,10 +262,11 @@ CREATE TABLE IF NOT EXISTS queue_entries (
   duration        INTEGER NOT NULL CHECK (duration > 0),
   party_size      INTEGER NOT NULL CHECK (party_size IN (2, 4)),
   player_ids      JSONB NOT NULL DEFAULT '[]',
+  deposit_tx_id   UUID REFERENCES wallet_transactions(id),
   court_id        TEXT REFERENCES courts(id) ON UPDATE CASCADE,
   status          TEXT NOT NULL DEFAULT 'waiting'
                     CHECK (status IN (
-                      'waiting', 'offered', 'accepted',
+                      'waiting', 'claimed', 'offered', 'accepted',
                       'declined', 'expired', 'cancelled',
                       'completed', 'insufficient_credits'
                     )),
@@ -290,3 +291,17 @@ INSERT INTO settings (key, value, description) VALUES
   ('nightMode',      '18:00',                    'Night mode start time'),
   ('bellDuration',   '3',                        'Bell duration in seconds')
 ON CONFLICT (key) DO NOTHING;
+
+-- ── Migration: queue deposit lifecycle ───────────────────────────────────────
+-- 1) Track the join-time wallet transaction on each queue entry so cancels and
+--    promotions can refund/re-target it per-payer.
+-- 2) Allow the transient 'claimed' status used by the queue processor's atomic
+--    claim (prevents concurrent processors double-booking one entry).
+ALTER TABLE queue_entries ADD COLUMN IF NOT EXISTS deposit_tx_id UUID REFERENCES wallet_transactions(id);
+ALTER TABLE queue_entries DROP CONSTRAINT IF EXISTS queue_entries_status_check;
+ALTER TABLE queue_entries ADD CONSTRAINT queue_entries_status_check
+  CHECK (status IN (
+    'waiting', 'claimed', 'offered', 'accepted',
+    'declined', 'expired', 'cancelled',
+    'completed', 'insufficient_credits'
+  ));

@@ -12,7 +12,7 @@ function makeChain(settingsMock?: any) {
   const c: any = {
     select: vi.fn(() => c),
     eq: vi.fn(() => c),
-    single: vi.fn(),
+    single: vi.fn(async () => ({ data: undefined, error: null })),
     order: vi.fn(() => c),
     insert: vi.fn(() => c),
     update: vi.fn(() => c),
@@ -56,6 +56,8 @@ function withWallet(db: any) {
     if (t === 'wallet_transactions') {
       const c = makeChain()
       c.insert = vi.fn(() => c)
+      c.select = vi.fn(() => c)
+      c.single = vi.fn(async () => ({ data: { id: 'tx-1' }, error: null }))
       return c
     }
     return orig(t)
@@ -130,6 +132,8 @@ describe('joinQueue', () => {
       }
       if (t === 'wallet_transactions') {
         c.insert = vi.fn(() => c)
+        c.select = vi.fn(() => c)
+        c.single = vi.fn(async () => ({ data: { id: 'tx-1' }, error: null }))
         return c
       }
       if (t === 'queue_entries') {
@@ -171,6 +175,8 @@ describe('joinQueue', () => {
       }
       if (t === 'wallet_transactions') {
         c.insert = vi.fn(() => c)
+        c.select = vi.fn(() => c)
+        c.single = vi.fn(async () => ({ data: { id: 'tx-1' }, error: null }))
         return c
       }
       if (t === 'queue_entries') {

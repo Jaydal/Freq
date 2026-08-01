@@ -322,4 +322,42 @@ describe('Booking simulation', () => {
     expect(tables.games.length).toBe(0)
     expect(tables.queue_entries[0].status).toBe('waiting')
   })
+
+  it('leaveQueue: refunds the join deposit exactly once and processes the court', async () => {
+    const now = Date.now()
+    const tables: Record<string, Row[]> = {
+      settings: [{ key: 'prices', value: '{"30":150,"60":300,"90":450}' }],
+      courts: [{ id: 'c1', name: 'Court 1', status: 'In Game' }],
+      games: [{
+        id: 'g1', court_id: 'c1', duration: 60, status: 'In Progress',
+        start_time: new Date(now - 10 * 60_000).toISOString(),
+        created_at: new Date(now - 10 * 60_000).toISOString(),
+      }],
+      queue_entries: [{
+        id: 'qe-1', member_id: 'm1', requested_start: new Date(now - 5 * 60_000).toISOString(),
+        duration: 60, party_size: 2, player_ids: '[]',
+        court_id: 'c1', status: 'waiting', deposit_tx_id: 'tx-1',
+        created_at: new Date(now - 5 * 60_000).toISOString(),
+      }],
+      members: [{ id: 'm1', status: 'Active' }],
+      wallets: [{ id: 'w1', member_id: 'm1', balance: 940 }],
+      wallet_transactions: [{
+        id: 'tx-1', wallet_id: 'w1', amount: -60, type: 'game_fee',
+        reference_number: 'QUEUE_DEPOSIT_1',
+      }],
+    }
+    const db = makeFakeDb(tables)
+    vi.doMock('@/lib/supabase/server', () => ({ createClient: vi.fn(async () => db) }))
+
+    const { leaveQueue } = await import('./queue-service')
+    await leaveQueue('qe-1')
+    await leaveQueue('qe-1') // second call must not double-refund
+
+    const refunds = tables.wallet_transactions.filter(t => t.type === 'Refund')
+    expect(refunds.length).toBe(1)
+    expect(refunds[0].amount).toBe(60)
+    expect(refunds[0].reference_number).toBe('refund-tx-1')
+    expect(tables.wallets[0].balance).toBe(1000)
+    expect(tables.queue_entries[0].status).toBe('cancelled')
+  })
 })
