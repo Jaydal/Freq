@@ -59,8 +59,6 @@ export async function POST(request: Request) {
       matchTitle: result.data.matchTitle,
     });
 
-    await publishBoardOnce();
-
     if (entry.status === 'completed' && entry.court_id) {
       const supabase = await createClient();
       const { data: court } = await supabase.from('courts').select('name').eq('id', entry.court_id).single();
@@ -107,7 +105,6 @@ export async function PATCH(request: Request) {
         const { data: court } = await supabase.from('courts').select('name').eq('id', entry.court_id).single();
         courtName = court?.name;
       }
-      await publishBoardOnce();
       return NextResponse.json({ success: true, courtName }, { status: 200 });
     }
 

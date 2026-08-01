@@ -1,8 +1,8 @@
 import { createClient } from '@/lib/supabase/server';
 import type { QueueEntry } from './index';
 import { findAvailableCourt, isSlotAvailable } from './booking-engine';
-import { publishDisplay } from '@/lib/mqtt';
-import { generatePayload } from '@/lib/display/sports-caster';
+import { publishAllDisplays } from '@/lib/display/publish-all';
+import { processCourtQueue, processAllCourts } from './queue-processor';
 import { getCost, ProductsConfig } from '@/lib/products-config-types';
 
 export interface JoinQueueParams {
@@ -103,19 +103,19 @@ export async function joinQueue(params: JoinQueueParams): Promise<QueueEntry> {
   let court = null;
 
   if (params.courtId) {
-      const { data: selected } = await supabase
-        .from('courts')
-        .select('id, name, status')
-        .eq('id', params.courtId)
-        .single();
-      // Book directly only if the court has no active game right now (schedule-
-      // based via isSlotAvailable), independent of the stale courts.status column.
-      if (selected) {
-        const now = new Date();
-        const slotFree = await isSlotAvailable(selected.id, now, new Date(now.getTime() + params.duration * 60_000));
-        if (slotFree) court = selected;
-      }
-    } else {
+    await processCourtQueue(params.courtId);
+    const { data: selected } = await supabase
+      .from('courts')
+      .select('id, name, status')
+      .eq('id', params.courtId)
+      .single();
+    if (selected) {
+      const now = new Date();
+      const slotFree = await isSlotAvailable(selected.id, now, new Date(now.getTime() + params.duration * 60_000));
+      if (slotFree) court = selected;
+    }
+  } else {
+    await processAllCourts();
     court = await findAvailableCourt(params.start, params.duration, params.partySize);
   }
 
@@ -151,7 +151,7 @@ export async function joinQueue(params: JoinQueueParams): Promise<QueueEntry> {
     await deductWallet(params.memberId, charge, game.id);
 
     // Fire-and-forget: publish board update without blocking the response
-    fetch(new URL('/api/display/publish-all', process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000').toString(), { method: 'POST' }).catch(console.error);
+    publishAllDisplays().catch(console.error);
 
     return {
       id: game.id,
@@ -195,7 +195,8 @@ export async function joinQueue(params: JoinQueueParams): Promise<QueueEntry> {
     throw new Error(error.message);
   }
 
-  fetch(new URL('/api/display/publish-all', process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000').toString(), { method: 'POST' }).catch(console.error);
+  // Fire-and-forget: publish board update and displays without blocking
+  publishAllDisplays().catch(console.error);
 
   return entry as QueueEntry;
 }
@@ -206,6 +207,7 @@ export async function leaveQueue(entryId: string): Promise<void> {
     .from('queue_entries')
     .update({ status: 'cancelled', updated_at: new Date().toISOString() })
     .eq('id', entryId);
+  publishAllDisplays().catch(console.error);
 }
 
 export async function getQueuePosition(entryId: string): Promise<number> {

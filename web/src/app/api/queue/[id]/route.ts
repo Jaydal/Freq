@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { publishDisplay } from '@/lib/mqtt';
-import { generatePayload } from '@/lib/display/sports-caster';
+import { publishAllDisplays } from '@/lib/display/publish-all';
 
 export async function DELETE(
   _request: Request,
@@ -25,7 +24,7 @@ export async function DELETE(
 
   if (game.court_id) {
     await supabase.from('courts').update({ status: 'Available' }).eq('id', game.court_id);
-    await publishDisplay(game.court_id, generatePayload(game.court_id, { current: null, upcoming: [] }));
+    await publishAllDisplays();
   }
 
   return NextResponse.json({ ok: true });
@@ -78,20 +77,9 @@ export async function PATCH(
     .join(' & ');
   const playerStr = (game.game_players ?? [])
     .map((p: any) => `${p.members?.first_name ?? ''} ${p.members?.last_name ?? ''}`.trim())
-    .filter((n: string) => n)
     .join(', ');
 
-  await publishDisplay(game.court_id, generatePayload(game.court_id, {
-    current: {
-      name: players || '',
-      startTime: new Date().toISOString(),
-      durationMinutes: game.duration,
-      matchTitle: game.match_title || '',
-      matchType: game.match_type || '',
-      players: playerStr,
-    },
-    upcoming: []
-  }));
+  await publishAllDisplays();
 
   return NextResponse.json({ ok: true });
 }

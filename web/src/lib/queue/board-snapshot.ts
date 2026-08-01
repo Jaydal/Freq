@@ -76,7 +76,7 @@ export async function getBoardSnapshot(supabase: SupabaseClient): Promise<BoardS
         .in('status', ['In Progress', 'Scheduled'])
         .order('created_at', { ascending: true }),
       supabase.from('courts').select('*').order('name', { ascending: true }),
-      supabase.from('queue_entries').select('*').eq('status', 'waiting').order('created_at', { ascending: true }),
+      supabase.from('queue_entries').select('*').in('status', ['waiting', 'claimed']).order('created_at', { ascending: true }),
       supabase.from('queue_entries').select('*').eq('status', 'offered').order('expires_at', { ascending: true }),
     ]);
 

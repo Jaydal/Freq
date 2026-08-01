@@ -121,6 +121,17 @@ describe('joinQueue', () => {
       if (t === 'members') {
         c.single = vi.fn(async () => ({ data: { status: 'Active' }, error: null }))
       }
+      if (t === 'wallets') {
+        c.update = vi.fn(() => c)
+        c.eq = vi.fn(() => c)
+        c.select = vi.fn(() => c)
+        c.single = vi.fn(async () => ({ data: { id: 'w1', balance: 940 }, error: null }))
+        return c
+      }
+      if (t === 'wallet_transactions') {
+        c.insert = vi.fn(() => c)
+        return c
+      }
       if (t === 'queue_entries') {
         c.single = vi.fn(async () => ({ data: null, error: null }))
         c.insert = vi.fn(() => {
@@ -150,6 +161,17 @@ describe('joinQueue', () => {
       }
       if (t === 'members') {
         c.single = vi.fn(async () => ({ data: { status: 'Active' }, error: null }))
+      }
+      if (t === 'wallets') {
+        c.update = vi.fn(() => c)
+        c.eq = vi.fn(() => c)
+        c.select = vi.fn(() => c)
+        c.single = vi.fn(async () => ({ data: { id: 'w1', balance: 940 }, error: null }))
+        return c
+      }
+      if (t === 'wallet_transactions') {
+        c.insert = vi.fn(() => c)
+        return c
       }
       if (t === 'queue_entries') {
         c.single = vi.fn(async () => ({ data: null, error: null }))

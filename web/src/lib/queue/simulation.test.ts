@@ -273,4 +273,53 @@ describe('Booking simulation', () => {
 
     expect(result.status).toBe('waiting')
   })
+
+  it('Promotion: concurrent processing cannot double-book a waiting entry', async () => {
+    const now = Date.now()
+    const tables: Record<string, Row[]> = {
+      settings: [{ key: 'prices', value: '{"30":150,"60":300,"90":450}' }],
+      courts: [{ id: 'c1', name: 'Court 1', status: 'Available' }],
+      games: [],
+      queue_entries: [{
+        id: 'e1', member_id: 'm1', duration: 60, party_size: 2,
+        player_ids: JSON.stringify(['m1']), status: 'waiting',
+        created_at: new Date(now - 5 * 60_000).toISOString(),
+      }],
+      members: [{ id: 'm1', status: 'Active' }],
+    }
+    const db = makeFakeDb(tables)
+    vi.doMock('@/lib/supabase/server', () => ({ createClient: vi.fn(async () => db) }))
+    vi.mocked((await import('./booking-engine')).isSlotAvailable).mockResolvedValue(true)
+
+    const { processCourtQueue } = await import('./queue-processor')
+    await Promise.all([processCourtQueue('c1'), processCourtQueue('c1')])
+
+    expect(tables.games.length).toBe(1)
+    expect(tables.queue_entries[0].status).toBe('completed')
+  })
+
+  it('Promotion: fails closed when no price is configured for the duration', async () => {
+    const now = Date.now()
+    const tables: Record<string, Row[]> = {
+      settings: [{ key: 'prices', value: '{}' }],
+      courts: [{ id: 'c1', name: 'Court 1', status: 'Available' }],
+      games: [],
+      queue_entries: [{
+        id: 'e1', member_id: 'm1', duration: 60, party_size: 2,
+        player_ids: JSON.stringify(['m1']), status: 'waiting',
+        created_at: new Date(now - 5 * 60_000).toISOString(),
+      }],
+      members: [{ id: 'm1', status: 'Active' }],
+    }
+    const db = makeFakeDb(tables)
+    vi.doMock('@/lib/supabase/server', () => ({ createClient: vi.fn(async () => db) }))
+    vi.mocked((await import('./booking-engine')).isSlotAvailable).mockResolvedValue(true)
+
+    const { processCourtQueue } = await import('./queue-processor')
+    const result = await processCourtQueue('c1')
+
+    expect(result).toBe(false)
+    expect(tables.games.length).toBe(0)
+    expect(tables.queue_entries[0].status).toBe('waiting')
+  })
 })

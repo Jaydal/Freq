@@ -3,8 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
 import { publishBoardOnce } from '@/lib/queue/board-publisher';
 import { processCourtQueue } from '@/lib/queue/queue-processor';
-import { publishDisplay } from '@/lib/mqtt';
-import { generatePayload } from '@/lib/display/sports-caster';
+import { publishAllDisplays } from '@/lib/display/publish-all';
 
 export async function updateCourt(courtId: string, name: string, newId?: string) {
   const supabase = await createClient();
@@ -39,18 +38,18 @@ export async function endGame(gameId: string, courtId: string, refund: boolean =
     .eq('id', gameId);
 
   if (refund && game.charge_amount) {
-    const memberIds = (game.game_players ?? []).map((gp: any) => gp.member_id).filter(Boolean);
-    const perPlayer = Math.round(Number(game.charge_amount) / (memberIds.length || 1));
-    for (const memberId of memberIds) {
+    const primaryMemberId = (game.game_players ?? [])[0]?.member_id;
+    if (primaryMemberId) {
+      const amount = Number(game.charge_amount);
       const { data: wallet } = await supabase
         .from('wallets')
         .select('id, balance')
-        .eq('member_id', memberId)
+        .eq('member_id', primaryMemberId)
         .single();
       if (wallet) {
         const { data: updated } = await supabase
           .from('wallets')
-          .update({ balance: wallet.balance + perPlayer })
+          .update({ balance: wallet.balance + amount })
           .eq('id', wallet.id)
           .eq('balance', wallet.balance)
           .select()
@@ -58,7 +57,7 @@ export async function endGame(gameId: string, courtId: string, refund: boolean =
         if (!updated) throw new Error('Concurrent wallet update, try again');
         await supabase.from('wallet_transactions').insert({
           wallet_id: wallet.id,
-          amount: perPlayer,
+          amount,
           type: 'Refund',
           reference_number: gameId,
           remarks: 'Game ended early — refund',
@@ -67,21 +66,8 @@ export async function endGame(gameId: string, courtId: string, refund: boolean =
     }
   }
 
-  const { data: court } = await supabase.from('courts').select('name').eq('id', courtId).single();
-  const { data: waiting } = await supabase.from('queue_entries').select('id').eq('status', 'waiting');
-  const queueCount = waiting?.length ?? 0;
-
-  const { data: settings } = await supabase.from('settings').select('value').eq('key', 'displaySequence').single();
-  let displaySequence;
-  try { if (settings?.value) displaySequence = JSON.parse(settings.value); } catch {}
-
-  await publishDisplay(courtId, generatePayload(courtId, { current: null, upcoming: [] }, { 
-    courtName: court?.name ?? courtId,
-    queueCount,
-    displaySequence
-  }));
   await processCourtQueue(courtId);
-  publishBoardOnce().catch(() => {});
+  await publishAllDisplays();
   revalidatePath('/courts');
 }
 
@@ -94,15 +80,9 @@ export async function updateGameDuration(gameId: string, durationMin: number, co
   
   if (error) throw new Error(error.message);
 
-  const { data: court } = await supabase.from('courts').select('name').eq('id', courtId).single();
-  const { data: queueCount } = await supabase.from('queue_entries').select('id', { count: 'exact' }).eq('status', 'waiting');
-  const { data: settings } = await supabase.from('settings').select('value').eq('key', 'displaySequence').single();
-  let displaySequence;
-  try { if (settings?.value) displaySequence = JSON.parse(settings.value); } catch {}
-
   // Republish display and board
   await processCourtQueue(courtId);
-  publishBoardOnce().catch(() => {});
+  await publishAllDisplays();
   revalidatePath('/courts');
 }
 
@@ -169,14 +149,6 @@ export async function requeueGame(gameId: string, courtId: string, position: num
     .update({ status: 'Completed', end_time: now })
     .eq('id', gameId);
 
-  const { data: court } = await supabase.from('courts').select('name').eq('id', courtId).single();
-  const { data: currentWait } = await supabase.from('queue_entries').select('id').eq('status', 'waiting');
-  
-  await publishDisplay(courtId, generatePayload(courtId, { current: null, upcoming: [] }, { 
-    courtName: court?.name ?? courtId,
-    queueCount: currentWait?.length ?? 0
-  }));
-
   await processCourtQueue(courtId);
 
   const { data: allWaiting } = await supabase
@@ -212,6 +184,6 @@ export async function requeueGame(gameId: string, courtId: string, position: num
   });
   if (error) throw new Error(error.message);
 
-  publishBoardOnce().catch(() => {});
+  await publishAllDisplays();
   revalidatePath('/courts');
 }
