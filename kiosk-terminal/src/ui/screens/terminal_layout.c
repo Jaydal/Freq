@@ -25,6 +25,8 @@ terminal_layout_t terminal_layout_create(lv_obj_t *parent) {
 
   layout.content = lv_obj_create(card);
   lv_obj_remove_style_all(layout.content);
+  lv_obj_set_style_bg_color(layout.content, kiosk_theme_color_bg(), 0);
+  lv_obj_set_style_bg_opa(layout.content, LV_OPA_COVER, 0);
   lv_obj_set_height(layout.content, lv_pct(100));
   lv_obj_set_flex_grow(layout.content, 1);
   lv_obj_clear_flag(layout.content, LV_OBJ_FLAG_SCROLLABLE);
@@ -37,6 +39,8 @@ terminal_layout_t terminal_layout_create(lv_obj_t *parent) {
 
   layout.sidebar = lv_obj_create(card);
   lv_obj_remove_style_all(layout.sidebar);
+  lv_obj_set_style_bg_color(layout.sidebar, kiosk_theme_color_bg(), 0);
+  lv_obj_set_style_bg_opa(layout.sidebar, LV_OPA_COVER, 0);
   lv_obj_set_size(layout.sidebar, 210, lv_pct(100));
   lv_obj_clear_flag(layout.sidebar, LV_OBJ_FLAG_SCROLLABLE);
 

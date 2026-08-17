@@ -9,13 +9,16 @@ import type { BoardSnapshot } from '@/lib/queue/board-snapshot';
 
 export function QueueBoard() {
   const [snapshot, setSnapshot] = useState<BoardSnapshot | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchInitial = useCallback(async () => {
     try {
       const data = await fetchBoardSnapshot();
       setSnapshot(data);
+      setError(null);
     } catch (err) {
       console.error('Failed to fetch board snapshot', err);
+      setError('Unable to load court data. Retrying...');
     }
   }, []);
 
@@ -24,7 +27,7 @@ export function QueueBoard() {
 
     const es = new EventSource('/api/queue/events');
     let sseDebounce: ReturnType<typeof setTimeout> | null = null;
-    es.onmessage = () => { 
+    es.onmessage = () => {
       if (sseDebounce) clearTimeout(sseDebounce);
       sseDebounce = setTimeout(() => {
         sseDebounce = null;
@@ -40,6 +43,16 @@ export function QueueBoard() {
   }, [fetchInitial]);
 
   if (!snapshot) {
+    if (error) {
+      return (
+        <div className="min-h-screen bg-black flex items-center justify-center text-white">
+          <div className="text-center">
+            <p className="text-red-400 mb-2">{error}</p>
+            <button onClick={fetchInitial} className="text-sky-400 underline text-sm">Retry now</button>
+          </div>
+        </div>
+      );
+    }
     return <div className="min-h-screen bg-black flex items-center justify-center text-white">Loading...</div>;
   }
 

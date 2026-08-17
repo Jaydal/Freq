@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useSidebar } from './sidebar-context';
-import { X } from 'lucide-react';
+import { X, Scan } from 'lucide-react';
 import {
   LayoutDashboard, Activity, Monitor, Users, CreditCard,
   Wallet, Settings, HeartPulse, BookOpen, Calendar
@@ -23,6 +23,7 @@ const groups = [
     items: [
       { href: '/members', label: 'Members', icon: Users },
       { href: '/rfid', label: 'RFID Cards', icon: CreditCard },
+      { href: '/rfid/bulk', label: 'Bulk Register', icon: Scan },
       { href: '/wallet', label: 'Wallet & Payments', icon: Wallet },
       { href: '/schedules', label: 'Schedules', icon: Calendar },
     ],

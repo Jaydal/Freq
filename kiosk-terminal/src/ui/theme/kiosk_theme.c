@@ -117,12 +117,6 @@ void kiosk_theme_init(void) {
   lv_style_set_translate_y(&kiosk_style_btn_primary, 0);
   lv_style_set_shadow_width(&kiosk_style_btn_primary, 0);
   lv_style_set_outline_width(&kiosk_style_btn_primary, 0);
-  /* Apply to pressed state as well */
-  lv_style_set_transform_width(&kiosk_style_btn_primary, 0);
-  lv_style_set_transform_width(&kiosk_style_btn_primary, 0); // (intentional duplicate for diff safety)
-  lv_style_set_transform_width(&kiosk_style_btn_primary, 0);
-  lv_style_set_transform_width(&kiosk_style_btn_primary, 0);
-  // Wait, let's just do it directly.
   
   lv_style_set_transition(&kiosk_style_btn_secondary, &global_no_trans);
   lv_style_set_anim_time(&kiosk_style_btn_secondary, 0);

@@ -2,6 +2,14 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import { useBleProvisioning } from '@/hooks/useBleProvisioning';
+import { BleConnectButton } from '@/components/ble/BleConnectButton';
+import { DeviceInfoCard } from '@/components/ble/DeviceInfoCard';
+import { WifiConfigForm } from '@/components/ble/WifiConfigForm';
+import { ProvisioningStatus } from '@/components/ble/ProvisioningStatus';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { toast } from 'sonner';
 
 interface DisplayInfo {
   mac: string;
@@ -26,8 +34,11 @@ export default function LedsPage() {
   const [showOverrideModal, setShowOverrideModal] = useState(false);
   const [overrideText, setOverrideText] = useState('');
   const [overrideColor, setOverrideColor] = useState('#FF0000');
+  const [showBleFlow, setShowBleFlow] = useState(false);
+  const [selectedBleDevice, setSelectedBleDevice] = useState<string | null>(null);
 
   const supabase = createClient();
+  const ble = useBleProvisioning();
 
   const discover = useCallback(async () => {
     setLoading(true);
@@ -49,6 +60,23 @@ export default function LedsPage() {
   }, [supabase]);
 
   useEffect(() => { discover(); }, [discover]);
+
+  useEffect(() => {
+    return () => {
+      ble.cancel();
+    };
+  }, [ble]);
+
+  useEffect(() => {
+    if (ble.state === 'SUCCESS') {
+      toast.success('Display provisioned successfully');
+      setShowBleFlow(false);
+      setSelectedBleDevice(null);
+      setTimeout(discover, 2000);
+    } else if (ble.state === 'WIFI_FAILED' || ble.state === 'ERROR') {
+      toast.error(ble.lastStatus?.failureReason ?? 'Provisioning failed');
+    }
+  }, [ble.state, ble.lastStatus, discover]);
 
   async function handleCourtChange(mac: string, courtId: string) {
     const court = courts.find(c => c.id === courtId);
@@ -96,18 +124,80 @@ export default function LedsPage() {
     setTimeout(discover, 2000);
   }
 
+  const selectedDevice = ble.devices.find((d) => d.id === selectedBleDevice) ?? null;
+
   return (
     <div className="p-6 space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">LED Displays</h1>
-        <button
-          onClick={discover}
-          className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 cursor-pointer"
-          disabled={loading}
-        >
-          {loading ? 'Discovering...' : 'Refresh'}
-        </button>
+        <div className="flex gap-2">
+          <Button onClick={() => setShowBleFlow((v) => !v)} variant="secondary">
+            {showBleFlow ? 'Hide Bluetooth' : 'Provision via Bluetooth'}
+          </Button>
+          <button
+            onClick={discover}
+            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 cursor-pointer"
+            disabled={loading}
+          >
+            {loading ? 'Discovering...' : 'Refresh'}
+          </button>
+        </div>
       </div>
+
+      {showBleFlow && (
+        <Card className="p-4 space-y-4">
+          <div>
+            <h2 className="text-lg font-semibold">Provision New Display</h2>
+            <p className="text-sm text-muted-foreground">
+              Use Bluetooth to send Wi-Fi credentials to a new or unconfigured display.
+            </p>
+          </div>
+
+          <ProvisioningStatus status={ble.lastStatus} state={ble.state} />
+
+          {ble.error && <p className="text-sm text-red-400">{ble.error}</p>}
+
+          {ble.state === 'IDLE' && (
+            <BleConnectButton supported={ble.supported} scanning={false} onScan={ble.scan} />
+          )}
+
+          {ble.state === 'SCANNING' && (
+            <p className="text-sm text-muted-foreground">Scanning for devices...</p>
+          )}
+
+          {ble.state === 'IDLE' && ble.devices.length > 0 && (
+            <div className="grid gap-3 md:grid-cols-2">
+              {ble.devices.map((device) => (
+                <DeviceInfoCard
+                  key={device.id}
+                  device={device}
+                  identity={device.id === selectedBleDevice ? ble.identity : null}
+                  onConnect={(id) => { setSelectedBleDevice(id); ble.connect(id); }}
+                  connecting={ble.state === 'CONNECTING'}
+                  onScanNetworks={ble.loadNetworks}
+                  networks={ble.networks}
+                  loadingNetworks={false}
+                />
+              ))}
+            </div>
+          )}
+
+          {(ble.state === 'READY' || ble.state === 'CONFIGURING' || ble.state === 'WIFI_CONNECTING') && selectedDevice && (
+            <WifiConfigForm
+              networks={ble.networks}
+              onSubmit={ble.provision}
+              onCancel={ble.cancel}
+              submitting={ble.state === 'CONFIGURING' || ble.state === 'WIFI_CONNECTING'}
+            />
+          )}
+
+          {(ble.state === 'SUCCESS' || ble.state === 'WIFI_FAILED' || ble.state === 'ERROR') && (
+            <Button onClick={() => { setShowBleFlow(false); setSelectedBleDevice(null); }} variant="secondary">
+              Close
+            </Button>
+          )}
+        </Card>
+      )}
 
       {displays.length === 0 && !loading && (
         <p className="text-muted-foreground">No displays found. Make sure displays are online and connected to MQTT, then click Refresh.</p>

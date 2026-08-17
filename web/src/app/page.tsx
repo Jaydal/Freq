@@ -3,12 +3,22 @@ import { Button } from "@/components/ui/button";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { Target, BarChart3, CreditCard, Scan, Monitor, Play, ClipboardCheck } from "lucide-react";
+import { withTimeout } from "@/lib/utils/timeout";
 
 async function getPrices(): Promise<Record<string, number>> {
   try {
-    const supabase = await createClient();
-    const { data } = await supabase.from('settings').select('value').eq('key', 'prices').single();
-    if (data?.value) return JSON.parse(data.value);
+    const supabase = await withTimeout(
+      createClient(),
+      10000,
+      () => { throw new Error('createClient timeout'); }
+    );
+
+    const { data, error } = await withTimeout(
+      supabase.from('settings').select('value').eq('key', 'prices').single(),
+      3000,
+      () => ({ data: null, error: { message: 'timeout' } } as any)
+    );
+    if (data?.value && !error) return JSON.parse(data.value);
   } catch {}
   return { "10": 10, "25": 150, "55": 300, "85": 450 };
 }

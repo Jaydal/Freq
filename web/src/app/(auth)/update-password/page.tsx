@@ -26,9 +26,9 @@ export default function UpdatePasswordPage({
   useEffect(() => {
     if (code && typeof code === 'string') {
       const supabase = createClient();
-      supabase.auth.exchangeCodeForSession(code).then(() => {
-        setReady(true);
-      });
+      supabase.auth.exchangeCodeForSession(code)
+        .then(() => setReady(true))
+        .catch(() => setReady(true));
       return;
     }
 
@@ -41,7 +41,7 @@ export default function UpdatePasswordPage({
 
     supabase.auth.getUser().then(({ data }) => {
       if (data.user) setReady(true);
-    });
+    }).catch(() => setReady(true));
 
     return () => subscription.unsubscribe();
   }, [code]);

@@ -62,6 +62,7 @@ add_executable(kiosk_sim
   src/hal_sim/sim_mqtt_transport.c
   src/hal_sim/sim_wifi_scanner.c
   src/hal_sim/sim_pn532.c
+  src/hal_sim/sim_nfc_reader.c
   src/net/freq_rest_client.c
   src/net/board_parser.c
   src/data/live/live_data_provider.c
@@ -87,6 +88,7 @@ add_executable(kiosk_sim
 target_include_directories(kiosk_sim PRIVATE
   ${CMAKE_SOURCE_DIR}
   ${CMAKE_SOURCE_DIR}/src
+  ${CMAKE_SOURCE_DIR}/src/net
   ${SDL2_INCLUDE_DIRS}
   ${CURL_INCLUDE_DIRS}
   ${MOSQUITTO_INCLUDE_DIRS}

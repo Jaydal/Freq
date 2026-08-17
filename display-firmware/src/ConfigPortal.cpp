@@ -163,6 +163,7 @@ bool ConfigPortal::connectSavedWiFi(uint8_t maxRetries) {
     WiFi.disconnect();
     unsigned long delayStart = millis();
     while (millis() - delayStart < 500) {
+      if (_driver) _driver->update();
       yield();
     }
     WiFi.begin(ssid.c_str(), pass.c_str());
@@ -188,9 +189,34 @@ void ConfigPortal::startPortal() {
 
   // Display the AP name and PIN on the LED matrix so the user can connect
   if (_driver) {
-    String pinMsg = String(apName) + "  PIN:" + apPass;
-    _driver->showRow(0, pinMsg.c_str());
-    _driver->update();
+    ZoneRenderInfo zones[1];
+    zones[0].panelStart = 0;
+    zones[0].panelEnd = 2;
+    zones[0].lineCount = 2;
+    zones[0].scaleX = 1;
+    zones[0].scaleY = 1;
+    zones[0].valign = "middle";
+    zones[0].borderCount = 0;
+
+    zones[0].lines[0].text = String("SSID: ") + apName;
+    zones[0].lines[0].effect = "SCROLL";
+    zones[0].lines[0].align = "center";
+    zones[0].lines[0].marginTop = 0;
+    zones[0].lines[0].marginBottom = 2;
+    zones[0].lines[0].r = 255;
+    zones[0].lines[0].g = 255;
+    zones[0].lines[0].b = 0;
+
+    zones[0].lines[1].text = String("PIN: ") + apPass;
+    zones[0].lines[1].effect = "SCROLL";
+    zones[0].lines[1].align = "center";
+    zones[0].lines[1].marginTop = 0;
+    zones[0].lines[1].marginBottom = 0;
+    zones[0].lines[1].r = 0;
+    zones[0].lines[1].g = 255;
+    zones[0].lines[1].b = 255;
+
+    _driver->setZones(zones, 1);
   }
 
   // W7: DNSServer and WebServer are allocated with `new` and intentionally never freed.

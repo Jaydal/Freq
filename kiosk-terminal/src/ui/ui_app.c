@@ -54,6 +54,7 @@ typedef struct {
 } ui_app_state_t;
 
 static ui_app_state_t s_app;
+static lv_obj_t *s_screen_root = NULL;
 
 const kiosk_data_provider_t *kiosk_data_provider_get(void) {
   return s_app.provider;
@@ -130,7 +131,7 @@ void ui_app_handle_scan(const char *rfid) {
 }
 
 void ui_app_force_render(void) {
-    render_current();
+    lv_obj_report_style_change(NULL);
 }
 
 /* ---- action handlers ---- */
@@ -353,10 +354,20 @@ static lv_obj_t *build_booting_screen(lv_obj_t *parent) {
   return root;
 }
 
+static void ensure_screen_root(void) {
+  if (!s_screen_root) {
+    lv_obj_t *scr = lv_scr_act();
+    s_screen_root = lv_obj_create(scr);
+    lv_obj_remove_style_all(s_screen_root);
+    lv_obj_add_style(s_screen_root, &kiosk_style_screen_bg, 0);
+    lv_obj_set_size(s_screen_root, lv_pct(100), lv_pct(100));
+  }
+}
+
 static void render_current(void) {
   static kiosk_board_t board;
 
-  lv_obj_t *scr = lv_scr_act();
+  ensure_screen_root();
   char member_name[64];
 
   bool needs_terminal = (s_app.step == KIOSK_STEP_EXISTING_QUEUE ||
@@ -369,11 +380,10 @@ static void render_current(void) {
 
   if (needs_terminal) {
     if (!s_app.has_terminal_layout) {
-      if (s_app.current_root) {
-        lv_obj_del(s_app.current_root);
-        s_app.current_root = NULL;
-      }
-      s_app.terminal_layout = terminal_layout_create(scr);
+      lv_obj_clean(s_screen_root);
+      s_app.current_root = NULL;
+      s_app.has_terminal_layout = false;
+      s_app.terminal_layout = terminal_layout_create(s_screen_root);
       s_app.current_root = s_app.terminal_layout.root;
       s_app.has_terminal_layout = true;
     } else {
@@ -381,25 +391,28 @@ static void render_current(void) {
       lv_obj_clean(s_app.terminal_layout.sidebar);
     }
   } else {
-    if (s_app.current_root) {
-      lv_obj_del(s_app.current_root);
+    if (s_app.has_terminal_layout) {
+      lv_obj_clean(s_screen_root);
+      s_app.current_root = NULL;
+      s_app.has_terminal_layout = false;
+    } else if (s_app.current_root) {
+      lv_obj_clean(s_screen_root);
       s_app.current_root = NULL;
     }
-    s_app.has_terminal_layout = false;
   }
 
   switch (s_app.step) {
     case KIOSK_STEP_SETUP: {
-      s_app.current_root = setup_screen_create(scr, handle_setup_done, NULL);
+      s_app.current_root = setup_screen_create(s_screen_root, handle_setup_done, NULL);
       break;
     }
     case KIOSK_STEP_BOOTING: {
-      s_app.current_root = build_booting_screen(scr);
+      s_app.current_root = build_booting_screen(s_screen_root);
       break;
     }
     case KIOSK_STEP_IDLE: {
       s_app.provider->get_board(&board);
-      s_app.current_root = queue_board_create(scr, &board, handle_scan, NULL);
+      s_app.current_root = queue_board_create(s_screen_root, &board, handle_scan, NULL);
       lv_obj_t *corner = lv_obj_create(s_app.current_root);
       lv_obj_remove_style_all(corner);
       lv_obj_set_size(corner, 60, 60);
@@ -409,7 +422,7 @@ static void render_current(void) {
       break;
     }
     case KIOSK_STEP_SCREENSAVER: {
-      s_app.current_root = screensaver_create(scr, close_to_idle, NULL);
+      s_app.current_root = screensaver_create(s_screen_root, close_to_idle, NULL);
       break;
     }
     case KIOSK_STEP_EXISTING_QUEUE: {

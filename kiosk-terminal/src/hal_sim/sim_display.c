@@ -15,5 +15,6 @@ void sim_display_init(void) {
   s_disp_drv.flush_cb = sdl_display_flush;
   s_disp_drv.hor_res = SDL_HOR_RES;
   s_disp_drv.ver_res = SDL_VER_RES;
+  s_disp_drv.direct_mode = 1;
   lv_disp_drv_register(&s_disp_drv);
 }

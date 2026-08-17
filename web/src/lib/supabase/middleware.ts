@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { withTimeout } from '../utils/timeout'
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
@@ -35,11 +36,23 @@ export async function updateSession(request: NextRequest) {
 
   // IMPORTANT: If you remove getClaims() and you use server-side rendering
   // with the Supabase client, your users may be randomly logged out.
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  let user: Awaited<ReturnType<ReturnType<typeof createServerClient>['auth']['getUser']>>['data']['user'] = null;
+  const authStart = Date.now();
+  try {
+    const result = await withTimeout(
+      supabase.auth.getUser(),
+      5000,
+      () => { throw new Error('Supabase auth timeout'); }
+    );
+    user = result.data.user;
+    console.log(`[middleware] auth getUser OK in ${Date.now() - authStart}ms, user=${user?.email ?? 'null'}`);
+  } catch (err) {
+    console.log(`[middleware] auth getUser failed in ${Date.now() - authStart}ms:`, err instanceof Error ? err.message : err);
+    user = null;
+  }
 
-  const isPublicRoute = request.nextUrl.pathname.startsWith('/login') ||
+  const path = request.nextUrl.pathname;
+  const isPublicRoute = path.startsWith('/login') ||
                         request.nextUrl.pathname.startsWith('/forgot-password') ||
                         request.nextUrl.pathname.startsWith('/update-password') ||
                         request.nextUrl.pathname.startsWith('/api/controller') ||
@@ -51,7 +64,9 @@ export async function updateSession(request: NextRequest) {
                         request.nextUrl.pathname.startsWith('/api/board') ||
                         request.nextUrl.pathname.startsWith('/health') ||
                         request.nextUrl.pathname.startsWith('/terminal') ||
-                        request.nextUrl.pathname === '/';
+                        path === '/';
+
+  console.log(`[middleware] path=${path} user=${user !== null} public=${isPublicRoute}`);
 
   if (!user && !isPublicRoute) {
     if (request.nextUrl.pathname.startsWith('/api')) {

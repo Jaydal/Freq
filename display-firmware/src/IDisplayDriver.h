@@ -70,5 +70,7 @@ public:
   virtual void runDiagnosticSequence() {}
   virtual void playBootAnimation(unsigned long durationMs) {}
   virtual void setOtaActive(bool active) {}
+  virtual void setConnecting(bool active) {}
+  virtual bool isAlive() { return false; }
   virtual ~IDisplayDriver() = default;
 };

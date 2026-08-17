@@ -328,6 +328,8 @@ lv_obj_t *step_booking_confirm_create(lv_obj_t *parent,
   lv_textarea_set_placeholder_text(ta, "e.g. Weekend Showdown");
   lv_obj_set_width(ta, lv_pct(100));
   lv_obj_set_style_anim_time(ta, 0, LV_PART_CURSOR);
+  lv_obj_set_style_bg_opa(ta, LV_OPA_TRANSP, LV_PART_CURSOR);
+  lv_obj_set_style_border_width(ta, 0, LV_PART_CURSOR);
   kiosk_theme_disable_transitions(ta);
   ctx->ta_match_title = ta;
   lv_obj_add_event_cb(ta, ta_event_cb, LV_EVENT_ALL, ctx);

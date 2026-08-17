@@ -74,15 +74,14 @@ static TelnetLogger g_log;
 #endif
 
 void setup() {
-  Serial.begin(115200);
-  delay(2000); // Wait for the PC to reconnect the USB CDC serial port after a reboot
-
-  // CRITICAL: The ESP32 automatically tries to connect to the last saved WiFi 
-  // network in the background on boot. This background task heavily interferes 
-  // with the DMA hardware initialization and causes a hard freeze.
-  // We MUST kill the WiFi task before doing anything!
+  // CRITICAL: Kill WiFi background task FIRST — before Serial, before DMA init.
+  // The ESP32 auto-connect WiFi task fragments the heap and causes DMA init to fail.
   WiFi.mode(WIFI_OFF);
-  delay(100); // Give the background WiFi task a moment to cleanly exit
+  delay(100);
+
+  Serial.begin(115200);
+  // Small pause to let USB CDC enumerate (non-critical; logs may be truncated on first boot)
+  delay(200);
 
   LOG("BOOTING UP! If you see this, the chip is NOT frozen!\n");
   LOG("\n=== Freq Court Display — HD-WF2 ===\n");
@@ -93,18 +92,43 @@ void setup() {
 
   g_display = new Hub75Driver();
   
-  // MUST initialize display first to allocate contiguous DMA memory
-  // before WiFi starts and fragments the heap!
   g_display->begin();
+  
+  if (!g_display->isAlive()) {
+    log_e("[main] FATAL: Display init failed — entering portal mode for recovery");
+    g_portalMode = true;
+    String setupMsg = "DISPLAY FAILED - " + g_portal.getPortalSSID();
+    g_display->showRow(0, setupMsg.c_str());
+    g_display->update();
+    g_portal.setDisplayDriver(g_display);
+    g_portal.startPortal();
+    return;
+  }
   
   // Play the premium 10-second pickleball boot animation
   g_display->playBootAnimation(10000);
+  g_display->setConnecting(true);
   // ── Boot branching: portal vs normal ──────────────────────────────────────
   if (!g_portal.isConfigured()) {
-    log_i("[main] No saved settings -> starting config portal");
     g_portalMode = true;
-    String setupMsg = "SETUP: CONNECT TO " + g_portal.getPortalSSID();
-    g_display->showRow(0, setupMsg.c_str());
+    g_display->setConnecting(false);
+    ZoneRenderInfo zones[1];
+    zones[0].panelStart = 0;
+    zones[0].panelEnd = 2;
+    zones[0].lineCount = 1;
+    zones[0].scaleX = 1;
+    zones[0].scaleY = 1;
+    zones[0].valign = "middle";
+    zones[0].borderCount = 0;
+    zones[0].lines[0].text = "SETUP: " + g_portal.getPortalSSID();
+    zones[0].lines[0].effect = "SCROLL";
+    zones[0].lines[0].align = "center";
+    zones[0].lines[0].marginTop = 0;
+    zones[0].lines[0].marginBottom = 2;
+    zones[0].lines[0].r = 255;
+    zones[0].lines[0].g = 255;
+    zones[0].lines[0].b = 255;
+    g_display->setZones(zones, 1);
     g_display->update();
     g_portal.setDisplayDriver(g_display);
     g_portal.startPortal();
@@ -113,15 +137,32 @@ void setup() {
 
   // ── Try saved WiFi; fall back to portal on failure ─────────────────────────
   if (!g_portal.connectSavedWiFi(3)) {
-    log_i("[main] WiFi failed -> starting config portal");
     g_portalMode = true;
-    String setupMsg = "WIFI FAILED - CONNECT TO " + g_portal.getPortalSSID();
-    g_display->showRow(0, setupMsg.c_str());
+    g_display->setConnecting(false);
+    ZoneRenderInfo zones[1];
+    zones[0].panelStart = 0;
+    zones[0].panelEnd = 2;
+    zones[0].lineCount = 1;
+    zones[0].scaleX = 1;
+    zones[0].scaleY = 1;
+    zones[0].valign = "middle";
+    zones[0].borderCount = 0;
+    zones[0].lines[0].text = "WIFI FAILED - " + g_portal.getPortalSSID();
+    zones[0].lines[0].effect = "SCROLL";
+    zones[0].lines[0].align = "center";
+    zones[0].lines[0].marginTop = 0;
+    zones[0].lines[0].marginBottom = 2;
+    zones[0].lines[0].r = 255;
+    zones[0].lines[0].g = 255;
+    zones[0].lines[0].b = 255;
+    g_display->setZones(zones, 1);
     g_display->update();
     g_portal.setDisplayDriver(g_display);
     g_portal.startPortal();
     return;
   }
+
+  g_display->setConnecting(false);
 
   // ── Sync time via SNTP ─────────────────────────────────────────────────────
   configTime(0, 0, "pool.ntp.org", "time.nist.gov");

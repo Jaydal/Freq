@@ -297,6 +297,9 @@ lv_obj_t *setup_screen_create(lv_obj_t *parent, setup_done_cb_t on_done, void *u
     lv_obj_set_style_border_width(ta, 1, 0);
     lv_obj_set_style_radius(ta, 6, 0);
     lv_obj_clear_flag(ta, LV_OBJ_FLAG_SCROLLABLE | LV_OBJ_FLAG_SCROLL_ON_FOCUS);
+    lv_obj_set_style_anim_time(ta, 0, LV_PART_CURSOR);
+    lv_obj_set_style_bg_opa(ta, LV_OPA_TRANSP, LV_PART_CURSOR);
+    lv_obj_set_style_border_width(ta, 0, LV_PART_CURSOR);
     if (have_existing) {
       const char *val = (const char *)&existing + FIELDS[i].offset;
       if (val[0]) lv_textarea_set_text(ta, val);

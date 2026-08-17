@@ -1,12 +1,18 @@
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
+import { createFetchWithTimeout } from '../utils/fetch'
+import { withTimeout } from '../utils/timeout'
 
 /**
  * If using Fluid compute: Don't put this client in a global variable. Always create a new client within each
  * function when using it.
  */
 export async function createClient() {
-  const cookieStore = await cookies()
+  const cookieStore = await withTimeout(
+    cookies(),
+    10000,
+    () => { throw new Error('cookies() timeout'); }
+  );
 
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -27,6 +33,9 @@ export async function createClient() {
             // user sessions.
           }
         },
+      },
+      global: {
+        fetch: createFetchWithTimeout(10000),
       },
     }
   )

@@ -26,7 +26,9 @@ public:
   void setZones(const ZoneRenderInfo* zones, uint8_t count) override;
   void runDiagnosticSequence() override;
   void playBootAnimation(unsigned long durationMs) override;
-  void setOtaActive(bool active) override { _otaActive = active; if (active) _matrix->clearScreen(); }
+  void setOtaActive(bool active) override { _otaActive = active; if (active && _matrix) _matrix->clearScreen(); }
+  void setConnecting(bool active) override { _connecting = active; if (active) _connectingStart = millis(); }
+  bool isAlive() override { return _matrix != nullptr; }
 
 private:
   MatrixPanel_I2S_DMA* _matrix;
@@ -94,6 +96,9 @@ private:
   unsigned long _timerBaseMs = 0;
   unsigned long _lastTimerRedraw = 0;
   bool _timerActive = false;
+
+  bool _connecting = false;
+  unsigned long _connectingStart = 0;
 
   String substituteTimer(const String& text) const;
   void redraw();

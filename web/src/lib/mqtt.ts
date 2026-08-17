@@ -106,6 +106,7 @@ export async function connectMqtt(): Promise<MqttClient | null> {
       g._mqttClient?.subscribe('courts/+/status', { qos: 1 });
       g._mqttClient?.subscribe('courts/+/display', { qos: 1 });
       g._mqttClient?.subscribe('freq/display/discover/response', { qos: 1 });
+      g._mqttClient?.subscribe('freq/queue/boundary/#', { qos: 1 });
       console.log('[mqtt] broker connected');
     });
 

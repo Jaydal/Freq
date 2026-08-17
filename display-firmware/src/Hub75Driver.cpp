@@ -131,16 +131,30 @@ void Hub75Driver::begin() {
   cfg.latch_blanking = 4;
   cfg.double_buff    = true;
   _matrix = new MatrixPanel_I2S_DMA(cfg);
-  bool ok = _matrix->begin();
-  log_i("[HUB75/WF2] begin: %s  geometry=%dx%d chain=%d",
-                ok ? "OK" : "FAILED", WF2_PANEL_W, WF2_PANEL_H, WF2_CHAIN);
-  if (!ok) { delete _matrix; _matrix = nullptr; return; }
-  _matrix->setBrightness8(153);
-  uint16_t green = _matrix->color565(0, 255, 0);
-  _matrix->fillScreen(green);
-  _matrix->flipDMABuffer();
-  delay(500);
-  redraw();
+
+  for (int attempt = 0; attempt < 3; attempt++) {
+    if (attempt > 0) {
+      delay(300);
+      delete _matrix;
+      _matrix = new MatrixPanel_I2S_DMA(cfg);
+    }
+    bool ok = _matrix->begin();
+    log_i("[HUB75/WF2] begin attempt %d: %s  geometry=%dx%d chain=%d",
+                  attempt + 1, ok ? "OK" : "FAILED", WF2_PANEL_W, WF2_PANEL_H, WF2_CHAIN);
+    if (ok) {
+      _matrix->setBrightness8(153);
+      uint16_t green = _matrix->color565(0, 255, 0);
+      _matrix->fillScreen(green);
+      _matrix->flipDMABuffer();
+      delay(500);
+      redraw();
+      return;
+    }
+  }
+
+  log_e("[HUB75/WF2] FATAL: Matrix init failed after 3 attempts");
+  delete _matrix;
+  _matrix = nullptr;
 }
 
 void Hub75Driver::clear() {
@@ -307,6 +321,16 @@ void Hub75Driver::runDiagnosticSequence() {
 void Hub75Driver::update() {
   if (!_matrix || _otaActive) return;
 
+  if (_connecting) {
+    unsigned long elapsed = millis() - _connectingStart;
+    float pulse = (sin(elapsed * 0.008f) + 1.0f) * 0.5f;
+    uint8_t brightness = (uint8_t)(pulse * 255);
+    uint16_t color = _matrix->color565(brightness, brightness, brightness);
+    _matrix->clearScreen();
+    _matrix->fillCircle(48, 8, 4, color);
+    _matrix->flipDMABuffer();
+    return;
+  }
 
 
   bool needsRedraw = false;

@@ -1,4 +1,4 @@
-import { defineConfig } from 'vitest/config'
+import { defineConfig, configDefaults } from 'vitest/config'
 import tsconfigPaths from 'vite-tsconfig-paths'
 
 export default defineConfig({
@@ -14,5 +14,6 @@ export default defineConfig({
     env: {
       INTERNAL_API_KEY: 'test-api-key',
     },
+    exclude: [...configDefaults.exclude, 'tests/e2e/**'],
   },
 })
