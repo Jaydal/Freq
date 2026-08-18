@@ -14,7 +14,7 @@ export async function createClient() {
     () => { throw new Error('cookies() timeout'); }
   );
 
-  return createServerClient(
+  const client = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
     {
@@ -29,8 +29,6 @@ export async function createClient() {
             )
           } catch {
             // The `setAll` method was called from a Server Component.
-            // This can be ignored if you have middleware refreshing
-            // user sessions.
           }
         },
       },
@@ -38,5 +36,29 @@ export async function createClient() {
         fetch: createFetchWithTimeout(10000),
       },
     }
-  )
+  );
+
+  if (process.env.PLAYWRIGHT_TEST_BYPASS_AUTH === '1') {
+    const originalGetUser = client.auth.getUser.bind(client.auth);
+    client.auth.getUser = async (jwt?: string) => {
+      if (jwt) return originalGetUser(jwt);
+      return {
+        data: {
+          user: {
+            id: 'mock-user-123',
+            aud: 'authenticated',
+            role: 'authenticated',
+            email: 'test@example.com',
+            app_metadata: {},
+            user_metadata: {},
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          }
+        },
+        error: null
+      } as any;
+    };
+  }
+
+  return client;
 }

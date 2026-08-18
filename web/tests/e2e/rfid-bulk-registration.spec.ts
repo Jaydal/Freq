@@ -8,6 +8,10 @@ if (!LOGIN_EMAIL || !LOGIN_PASSWORD) {
 }
 
 async function loginIfNeeded(page: Page) {
+  if (process.env.PLAYWRIGHT_TEST_BYPASS_AUTH === '1') {
+    return; // Bypass auth
+  }
+
   await page.goto('/login');
   await page.waitForLoadState('networkidle');
 

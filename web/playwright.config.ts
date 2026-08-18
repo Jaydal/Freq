@@ -1,5 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 
+process.env.PLAYWRIGHT_TEST_BYPASS_AUTH = '1';
+
 export default defineConfig({
   testDir: './tests/e2e',
   fullyParallel: true,

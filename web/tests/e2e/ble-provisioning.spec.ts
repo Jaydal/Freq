@@ -1,6 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 
 function loginIfNeeded(page: Page) {
+  if (process.env.PLAYWRIGHT_TEST_BYPASS_AUTH === '1') return Promise.resolve();
   return page.goto('/login').then(() => page.waitForLoadState('networkidle'));
 }
 

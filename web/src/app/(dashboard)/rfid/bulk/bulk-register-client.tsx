@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,6 +14,92 @@ export default function BulkRegisterClient({ initialCards }: { initialCards: any
   const [cards, setCards] = useState<any[]>(initialCards);
   const [uid, setUid] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleExportCSV = () => {
+    if (!cards || cards.length === 0) {
+      toast.warning('No cards to export');
+      return;
+    }
+    const headers = ['uid', 'status', 'created_at'];
+    const csvContent = [
+      headers.join(','),
+      ...cards.map(card => [
+        card.uid,
+        card.status || 'Active',
+        card.assigned_date || ''
+      ].join(','))
+    ].join('\n');
+    
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `rfid_cards_${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast.success('CSV Exported successfully');
+  };
+
+  const handleImportCSVClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleImportCSVChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    try {
+      const text = await file.text();
+      const rows = text.split('\n').map(r => r.trim()).filter(r => r.length > 0);
+      if (rows.length < 2) {
+        throw new Error('CSV is empty or missing headers');
+      }
+      
+      const headers = rows[0].split(',').map(h => h.trim().toLowerCase());
+      const uidIndex = headers.indexOf('uid');
+      if (uidIndex === -1) {
+        throw new Error('CSV must have a "uid" column');
+      }
+      
+      setSubmitting(true);
+      let successCount = 0;
+      let skipCount = 0;
+      
+      for (let i = 1; i < rows.length; i++) {
+        const columns = rows[i].split(',').map(c => c.trim());
+        const cardUid = columns[uidIndex];
+        
+        if (!cardUid) continue;
+        
+        if (cards.some(c => c.uid === cardUid)) {
+          skipCount++;
+          continue;
+        }
+        
+        try {
+          await assignRFID({ uid: cardUid, memberId: null });
+          successCount++;
+        } catch (err: any) {
+          if (err.message?.includes('already')) {
+             skipCount++;
+          } else {
+            console.error('Failed to import UID:', cardUid, err);
+          }
+        }
+      }
+      
+      toast.success(`Import complete: ${successCount} added, ${skipCount} skipped.`);
+      await refreshCards();
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to import CSV');
+    } finally {
+      setSubmitting(false);
+      e.target.value = '';
+    }
+  };
 
   const refreshCards = async () => {
     const supabase = createClient();
@@ -108,6 +194,24 @@ export default function BulkRegisterClient({ initialCards }: { initialCards: any
       </Card>
 
       <Card className="border-zinc-800 bg-zinc-900/30 overflow-hidden">
+        <CardHeader className="flex flex-row items-center justify-between py-4">
+          <CardTitle className="text-zinc-150 text-lg">Registered Cards</CardTitle>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={handleExportCSV} className="border-zinc-700 bg-zinc-950/40">
+              Export CSV
+            </Button>
+            <Button variant="outline" size="sm" onClick={handleImportCSVClick} className="border-zinc-700 bg-zinc-950/40" disabled={submitting}>
+              {submitting ? 'Importing...' : 'Import CSV'}
+            </Button>
+            <input 
+              type="file" 
+              accept=".csv" 
+              ref={fileInputRef} 
+              onChange={handleImportCSVChange} 
+              className="hidden" 
+            />
+          </div>
+        </CardHeader>
         <CardContent className="p-0">
           <Table>
             <TableHeader className="bg-zinc-950/40">

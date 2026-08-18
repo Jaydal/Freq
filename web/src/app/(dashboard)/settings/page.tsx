@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ProductsEditor } from '@/features/settings/components/ProductsEditor';
 import { DisplaySequenceEditor } from '@/features/settings/components/DisplaySequenceEditor';
+import { BackupRestoreManager } from '@/features/settings/components/BackupRestoreManager';
 
 export default async function SettingsPage() {
   const supabase = await createClient();
@@ -42,6 +43,16 @@ export default async function SettingsPage() {
         </CardHeader>
         <CardContent>
           <DisplaySequenceEditor sequence={sequenceRow?.value ?? ''} />
+        </CardContent>
+      </Card>
+
+      <Card className="border-zinc-800 bg-zinc-900/30">
+        <CardHeader className="pb-4">
+          <CardTitle className="text-zinc-200">Data Backup & Restore</CardTitle>
+          <CardDescription className="text-zinc-500">Export a complete JSON backup of courts, settings, members, wallets, and RFID cards, or restore from an existing backup.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <BackupRestoreManager />
         </CardContent>
       </Card>
 
