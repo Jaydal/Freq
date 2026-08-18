@@ -911,10 +911,13 @@ void Hub75Driver::playBootAnimation(unsigned long durationMs) {
   uint16_t colorDark = _matrix->color565(50, 50, 50);
   
   auto drawPaddle = [&](float px, float py, float hue) {
-    _matrix->fillRect((int)px - 3, (int)py - 8, 7, 17, colorWhite);
-    _matrix->fillRect((int)px - 1, (int)py + 9, 3, 6, colorDark);
+    // Face (white inside)
+    _matrix->fillRect((int)px - 2, (int)py - 6, 5, 10, colorWhite);
+    // Handle
+    _matrix->fillRect((int)px - 1, (int)py + 4, 3, 4, colorDark);
+    // Face border
     uint16_t edgeCol = hsv2rgb(hue, 1.0f, 1.0f);
-    _matrix->drawRect((int)px - 4, (int)py - 9, 9, 19, edgeCol);
+    _matrix->drawRect((int)px - 3, (int)py - 7, 7, 12, edgeCol);
   };
 
   while (millis() - start < durationMs) {
