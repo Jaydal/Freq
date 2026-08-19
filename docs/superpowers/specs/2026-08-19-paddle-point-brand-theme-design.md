@@ -215,3 +215,72 @@ Keep existing `--radius: 0.625rem`. The existing radius scale (`sm`, `md`, `lg`,
 - LVGL kiosk firmware styling (separate C/LVGL project)
 - ESP32 LED display content (MQTT-driven, separate firmware)
 - Mobile app (none exists)
+
+## 14. Web Boot Animation
+
+**Source of truth:** `display-firmware/src/Hub75Driver.cpp::playBootAnimation(10000)` — a 10-second, 6-phase LED animation:
+1. **0–1s:** Center pulse → expanding colorful ring
+2. **1–3s:** Glowing orb with ball materializing
+3. **3–6s:** Ball bounces around screen with rainbow trail and particle impacts
+4. **6–8s:** Ball returns to center, two paddles slide in from left/right
+5. **8–9s:** Paddles rally toward center, ball strikes with particle burst
+6. **9–10s:** "PADDLE POINT" text fades in over settled scene
+
+**Web adaptation:** Full-screen overlay animation shown on first site visit (or once per session), then dismissed automatically. Must use brand colors (`#0E5E9A`, `#32A45E`) and feel energetic/sports-like.
+
+### Implementation approach
+
+**Recommended:** CSS + SVG animation (no canvas dependency, GPU-accelerated, lightweight).
+
+**File:** `src/components/brand/BootAnimation.tsx` (new)
+
+**Component contract:**
+- **Props:** `durationMs?: number` (default 10000)
+- **Behavior:** 
+  - Renders fixed full-screen overlay with `z-50`
+  - Animates through 6 phases using CSS keyframes / SVG transforms
+  - Auto-dismisses after `durationMs` via `setTimeout`
+  - Stores dismissal in `sessionStorage` (show once per tab/session) — NOT `localStorage` (we want returning visitors to see it again for brand reinforcement, but not on every page navigation)
+  - Fade-out transition (~500ms) before removing from DOM
+- **Accessibility:** `aria-live="polite"` with hidden status text; `pointer-events-none` after dismissal; respects `prefers-reduced-motion` (skip or shorten to 2s)
+
+### Phase-to-visual mapping (web)
+
+| Phase | Duration | Visual |
+|---|---|---|
+| 1 | 0–1s | Center dot pulses, then expands into a rotating rainbow ring. Background: deep brand blue `#0E5E9A`. |
+| 2 | 1–3s | Glowing orb (radial gradient, green `#32A45E` core → blue halo). Ball (yellow circle) scales up from center. |
+| 3 | 3–6s | Ball bounces off screen edges with a trailing comet effect (CSS motion blur or multiple fading clones). Hue-rotates through brand spectrum. |
+| 4 | 6–8s | Ball eases back to center. Two paddle shapes (SVG paths matching `Submark 1.svg` style) slide in from off-screen left/right. |
+| 5 | 8–9s | Paddles center, ball strikes midpoint, particle burst (small divs with `border-radius: 50%` animated outward with CSS). |
+| 6 | 9–10s | Ball/paddles settle. "PADDLE POINT" text fades in using brand white. Subtitle: "Solano, Nueva Vizcaya" fades in below. |
+
+### Integration point
+
+**File:** `src/app/page.tsx`
+
+Wrap the landing page content:
+
+```tsx
+import BootAnimation from '@/components/brand/BootAnimation';
+
+export default async function LandingPage({ searchParams }) {
+  // ... existing logic ...
+  return (
+    <>
+      <BootAnimation />
+      {/* existing landing page markup */}
+    </>
+  );
+}
+```
+
+The animation mounts before the rest of the page renders. Since the landing page is already a server component, `BootAnimation` must be a `'use client'` component.
+
+### Files to add/modify
+
+| File | Change |
+|---|---|
+| `src/components/brand/BootAnimation.tsx` | New: boot animation client component |
+| `src/app/page.tsx` | Wrap with `<BootAnimation />` |
+| `src/app/globals.css` | Optional: add boot animation keyframes if CSS-only (no Framer Motion) |
