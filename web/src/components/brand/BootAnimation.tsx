@@ -5,6 +5,10 @@ import { useEffect, useRef, useState } from 'react';
 const BRAND_BLUE = '#0E5E9A';
 const BRAND_GREEN = '#32A45E';
 
+// TODO: import from @/constants/brand when available
+
+const BOOT_ANIMATION_DURATION_MS = 10_000;
+
 /* ── Phase 1: 0–1s — Center pulse + expanding ring ── */
 const Phase1Ring = () => (
   <div className="absolute inset-0 flex items-center justify-center">
@@ -192,7 +196,7 @@ export default function BootAnimation() {
       dismissedRef.current = true;
       setDismissed(true);
       setTimeout(() => setVisible(false), 500);
-    }, 10000);
+    }, BOOT_ANIMATION_DURATION_MS);
     return () => clearTimeout(timer);
   }, [visible]);
 
