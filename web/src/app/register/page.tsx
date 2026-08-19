@@ -117,18 +117,18 @@ export default function RegisterPage() {
 
   if (result) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background p-4">
-        <Card className="w-full max-w-md">
+      <div className="min-h-screen flex items-center justify-center bg-muted p-4">
+        <Card className="w-full max-w-md border-primary/20 shadow-lg shadow-primary/5">
           <CardHeader>
-            <CardTitle>Registration Complete</CardTitle>
+            <CardTitle className="text-primary">Registration Complete</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <p className="text-green-600 font-medium">Member registered successfully!</p>
+            <p className="text-secondary font-medium">Member registered successfully!</p>
             <div className="text-sm text-muted-foreground space-y-1">
               <p>Member ID: <span className="font-mono">{result.memberId}</span></p>
               {rfidUid && <p>RFID: <span className="font-mono">{rfidUid}</span></p>}
             </div>
-            <Button onClick={() => setResult(null)} className="w-full">
+            <Button onClick={() => setResult(null)} className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
               Register Another
             </Button>
           </CardContent>
@@ -138,10 +138,10 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4">
-      <Card className="w-full max-w-md">
+    <div className="min-h-screen flex items-center justify-center bg-muted p-4">
+      <Card className="w-full max-w-md border-primary/20 shadow-lg shadow-primary/5">
         <CardHeader>
-          <CardTitle>Member Registration</CardTitle>
+          <CardTitle className="text-primary">Member Registration</CardTitle>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -194,7 +194,7 @@ export default function RegisterPage() {
                   variant="outline"
                   onClick={handleScanNfc}
                   disabled={scanning}
-                  className="shrink-0"
+                  className="shrink-0 border-primary text-primary hover:bg-primary/10"
                 >
                   {scanning ? 'Scanning…' : 'Scan NFC'}
                 </Button>
@@ -216,7 +216,7 @@ export default function RegisterPage() {
 
             {error && <p className="text-sm text-destructive">{error}</p>}
 
-            <Button type="submit" disabled={submitting} className="w-full">
+            <Button type="submit" disabled={submitting} className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
               {submitting ? 'Registering…' : 'Register Member'}
             </Button>
           </form>
