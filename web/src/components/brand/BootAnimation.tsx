@@ -92,14 +92,6 @@ const Phase4Paddles = () => (
         filter: 'drop-shadow(0 0 10px rgba(255,255,255,0.3))',
       }}
     />
-    <div
-      className="w-8 h-8 rounded-full bg-yellow-400"
-      style={{
-        animation: 'boot-fade-in 0.5s ease 6.5s forwards',
-        opacity: 0,
-        boxShadow: '0 0 20px rgba(255,215,0,0.6)',
-      }}
-    />
     <PaddleSVG
       className="w-16 h-32"
       style={{
@@ -161,14 +153,6 @@ const Phase5Rally = () => {
 /* ── Phase 6: 9–10s — Text fade in ── */
 const Phase6Text = () => (
   <div className="absolute inset-0 flex items-center justify-center">
-    <div className="absolute flex items-center justify-between w-full max-w-3xl px-32">
-      <PaddleSVG className="w-20 h-40" style={{ animation: 'boot-rally-pulse 0.4s ease-in-out infinite alternate' }} />
-      <PaddleSVG className="w-20 h-40" style={{ animation: 'boot-rally-pulse 0.4s ease-in-out infinite alternate' }} />
-    </div>
-    <div
-      className="absolute w-8 h-8 rounded-full bg-yellow-400"
-      style={{ boxShadow: '0 0 20px rgba(255,215,0,0.6)' }}
-    />
     <h1
       className="text-5xl font-black tracking-widest text-white relative z-10"
       style={{

@@ -175,16 +175,6 @@
   100% { transform: translate(50vw, 5vh) scale(1, 1); }
 }
 
-@keyframes boot-paddle-enter-left {
-  0% { transform: translateX(-150%); opacity: 0; }
-  100% { transform: translateX(0); opacity: 1; }
-}
-
-@keyframes boot-paddle-enter-right {
-  0% { transform: translateX(150%); opacity: 0; }
-  100% { transform: translateX(0); opacity: 1; }
-}
-
 @keyframes boot-rally-pulse {
   0%, 100% { transform: scale(1); }
   50% { transform: scale(1.2); }
