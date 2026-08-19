@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 const BRAND_BLUE = '#0E5E9A';
 const BRAND_GREEN = '#32A45E';
@@ -167,28 +167,43 @@ const Phase6Text = () => (
 );
 
 /* ── Main component ── */
-export default function BootAnimation({ durationMs = 10000 }: { durationMs?: number }) {
+export default function BootAnimation() {
   const [visible, setVisible] = useState(false);
   const [dismissed, setDismissed] = useState(false);
+  const dismissedRef = useRef(false);
 
   useEffect(() => {
     const seen = sessionStorage.getItem('pp-boot-animation-seen');
     if (!seen) {
-      setVisible(true);
       sessionStorage.setItem('pp-boot-animation-seen', 'true');
+      const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      if (prefersReducedMotion) {
+        setVisible(false);
+      } else {
+        setVisible(true);
+      }
     }
   }, []);
 
   useEffect(() => {
     if (!visible) return;
     const timer = setTimeout(() => {
+      if (dismissedRef.current) return;
+      dismissedRef.current = true;
       setDismissed(true);
       setTimeout(() => setVisible(false), 500);
-    }, durationMs);
+    }, 10000);
     return () => clearTimeout(timer);
-  }, [visible, durationMs]);
+  }, [visible]);
 
   if (!visible) return null;
+
+  const dismiss = () => {
+    if (dismissedRef.current) return;
+    dismissedRef.current = true;
+    setDismissed(true);
+    setTimeout(() => setVisible(false), 500);
+  };
 
   return (
     <div
@@ -224,10 +239,7 @@ export default function BootAnimation({ durationMs = 10000 }: { durationMs?: num
       </div>
 
       <button
-        onClick={() => {
-          setDismissed(true);
-          setTimeout(() => setVisible(false), 500);
-        }}
+        onClick={dismiss}
         className="absolute top-4 right-4 text-white/50 hover:text-white text-sm z-50"
         aria-label="Skip animation"
       >
