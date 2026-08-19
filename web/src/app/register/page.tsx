@@ -47,6 +47,7 @@ export default function RegisterPage() {
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<{ memberId: string } | null>(null);
   const [error, setError] = useState('');
+  const cardClass = "w-full max-w-md border-primary/20 shadow-lg shadow-primary/5";
 
   async function handleScanNfc() {
     if (!('NDEFReader' in window)) {
@@ -118,7 +119,7 @@ export default function RegisterPage() {
   if (result) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-muted p-4">
-        <Card className="w-full max-w-md border-primary/20 shadow-lg shadow-primary/5">
+        <Card className={cardClass}>
           <CardHeader>
             <CardTitle className="text-primary">Registration Complete</CardTitle>
           </CardHeader>
@@ -139,7 +140,7 @@ export default function RegisterPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-muted p-4">
-      <Card className="w-full max-w-md border-primary/20 shadow-lg shadow-primary/5">
+      <Card className={cardClass}>
         <CardHeader>
           <CardTitle className="text-primary">Member Registration</CardTitle>
         </CardHeader>
