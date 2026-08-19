@@ -10,6 +10,7 @@ const inter = Inter({ subsets: ["latin"] });
 export const metadata: Metadata = {
   title: "Paddle Point — Pickleball Court Management",
   description: "Management Portal for Paddle Point Pickleball Courts — Solano, Nueva Vizcaya",
+  icons: { icon: PP_ICON },
 };
 
 export default function RootLayout({
@@ -19,9 +20,6 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <head>
-        <link rel="icon" href={PP_ICON} />
-      </head>
       <body className={inter.className}>
         <Providers>{children}</Providers>
         <Toaster />

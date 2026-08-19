@@ -5,8 +5,6 @@ import { useEffect, useRef, useState } from 'react';
 const BRAND_BLUE = '#0E5E9A';
 const BRAND_GREEN = '#32A45E';
 
-// TODO: import from @/constants/brand when available
-
 const BOOT_ANIMATION_DURATION_MS = 10_000;
 
 /* ── Phase 1: 0–1s — Center pulse + expanding ring ── */

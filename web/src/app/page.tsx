@@ -30,7 +30,7 @@ function CourtIllustration() {
   return (
     <Image
       src={PP_LOGO}
-      alt="Paddle Point court illustration"
+      alt="Paddle Point logo"
       width={400}
       height={260}
       className="w-full max-w-lg mx-auto"
