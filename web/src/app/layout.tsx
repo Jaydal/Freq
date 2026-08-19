@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/features/auth/components/providers";
 import { Toaster } from "@/components/ui/sonner";
+import { PP_ICON } from "@/constants/brand";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -18,6 +19,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        <link rel="icon" href={PP_ICON} />
+      </head>
       <body className={inter.className}>
         <Providers>{children}</Providers>
         <Toaster />
