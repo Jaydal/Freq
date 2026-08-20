@@ -46,7 +46,7 @@ export function QueueList({ entries }: Props) {
               className="flex items-center gap-2 bg-zinc-800 rounded px-3 py-2"
             >
               <span className={`size-6 rounded-full flex items-center justify-center text-[10px] font-medium shrink-0 ${
-                e.position === 1 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-zinc-700 text-zinc-400'
+                e.position === 1 ? 'bg-secondary/20 text-secondary' : 'bg-zinc-700 text-zinc-400'
               }`}>
                 {e.position}
               </span>
@@ -58,7 +58,7 @@ export function QueueList({ entries }: Props) {
               <span className="text-[11px] text-zinc-500 w-12 shrink-0">{e.courtName || 'Any'}</span>
               <span className="text-[11px] text-zinc-500 w-14 shrink-0 text-right">{formatTime(e.bookedAt)}</span>
               <span className="text-[11px] text-zinc-500 w-12 shrink-0 text-right">{e.duration}m</span>
-              <span className="text-[11px] text-emerald-400/80 w-24 text-right shrink-0 font-mono tracking-tight">
+              <span className="text-[11px] text-secondary/80 w-24 text-right shrink-0 font-mono tracking-tight">
                 {formatTime(start)} - {formatTime(end)}
               </span>
               <span className="text-[11px] text-zinc-400 w-12 text-right shrink-0">{e.estimatedWait}</span>

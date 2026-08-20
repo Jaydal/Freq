@@ -22,17 +22,18 @@ export function BookingStepper({ current, memberName, balance, onCancel }: Props
   return (
     <div className="w-full px-4 pt-4 pb-2 flex flex-col gap-4">
       {/* Member info header card */}
-      <div className="flex items-center justify-between bg-zinc-900/40 backdrop-blur-md border border-zinc-800/80 rounded-xl px-4 py-2.5 shadow-sm">
+      <div className="flex items-center justify-between bg-primary/40 backdrop-blur-md border border-primary-foreground/20 rounded-xl px-4 py-2.5 shadow-sm">
         <div className="flex items-center gap-2.5">
-          <div className="size-7 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
-            <User className="size-4 text-emerald-400" />
+          <img src="/brand/pp-submark.svg" alt="Paddle Point" className="size-5 w-auto" />
+          <div className="size-7 rounded-full bg-secondary/10 border border-secondary/20 flex items-center justify-center">
+            <User className="size-4 text-secondary" />
           </div>
           <div className="flex flex-col">
             {memberName && (
               <span className="text-xs font-semibold text-zinc-200 tracking-wide">{memberName}</span>
             )}
             {balance !== undefined && (
-              <span className="text-[10px] font-medium text-emerald-400/90">
+              <span className="text-[10px] font-medium text-secondary/90">
                 Balance: <span className="font-bold">₱{balance.toLocaleString()}</span>
               </span>
             )}
@@ -61,10 +62,10 @@ export function BookingStepper({ current, memberName, balance, onCancel }: Props
                 <div
                   className={`size-8 rounded-full flex items-center justify-center text-xs font-bold border-2 transition-all duration-300 ${
                     done
-                      ? 'bg-emerald-500 border-emerald-500 text-black shadow-[0_0_12px_rgba(16,185,129,0.3)]'
+                      ? 'bg-secondary border-secondary text-white shadow-[0_0_12px_rgba(50,164,94,0.3)]'
                       : active
-                      ? 'bg-zinc-950 border-emerald-400 text-emerald-400 shadow-[0_0_15px_rgba(52,211,153,0.2)]'
-                      : 'bg-zinc-950 border-zinc-850 text-zinc-650'
+                      ? 'bg-primary border-secondary text-secondary shadow-[0_0_15px_rgba(50,164,94,0.2)]'
+                      : 'bg-primary border-primary-foreground/20 text-primary-foreground/80'
                   }`}
                 >
                   {done ? (
@@ -75,7 +76,7 @@ export function BookingStepper({ current, memberName, balance, onCancel }: Props
                 </div>
                 <span
                   className={`text-[9px] mt-1.5 font-bold tracking-wider uppercase transition-all duration-300 ${
-                    done ? 'text-emerald-400' : active ? 'text-zinc-100' : 'text-zinc-600'
+                    done ? 'text-secondary' : active ? 'text-primary-foreground' : 'text-primary-foreground/80'
                   }`}
                 >
                   {step.label}
@@ -84,9 +85,9 @@ export function BookingStepper({ current, memberName, balance, onCancel }: Props
 
               {/* Connector line (not after last) */}
               {i < STEPS.length - 1 && (
-                <div className="flex-1 h-[2px] mx-2 mb-5 relative bg-zinc-900 rounded-full overflow-hidden">
+                <div className="flex-1 h-[2px] mx-2 mb-5 relative bg-primary-foreground/20 rounded-full overflow-hidden">
                   <div 
-                    className={`absolute inset-y-0 left-0 transition-all duration-500 ease-out bg-gradient-to-r from-emerald-500 to-emerald-400 ${
+                    className={`absolute inset-y-0 left-0 transition-all duration-500 ease-out bg-gradient-to-r from-secondary to-secondary/80 ${
                       done ? 'w-full' : 'w-0'
                     }`} 
                   />

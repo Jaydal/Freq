@@ -51,18 +51,18 @@ export function CourtStatusCard({ court }: Props) {
   return (
     <div className={`rounded-lg p-3 border-l-4 ${
       isActive
-        ? 'bg-zinc-900 border-l-emerald-400'
+        ? 'bg-primary border-l-secondary'
         : 'bg-zinc-800/50 border-l-zinc-600'
     }`}>
       <div className="flex items-center justify-between mb-1">
         <h3 className="text-sm font-semibold text-zinc-100">{court.name}</h3>
         {isActive && (
-          <span className="text-xs font-medium px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400">
+          <span className="text-xs font-medium px-2 py-0.5 rounded bg-secondary/10 text-secondary">
             {'In Game'}
           </span>
         )}
         {!isActive && court.status !== 'Scheduled' && (
-          <span className="text-xs font-medium text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded">
+          <span className="text-xs font-medium text-secondary bg-secondary/10 px-2 py-0.5 rounded">
             Available
           </span>
         )}
@@ -75,8 +75,8 @@ export function CourtStatusCard({ court }: Props) {
       {isActive && court.duration && (
         <>
           <div className="flex flex-col items-center py-2">
-            <div className="rounded-xl px-4 py-3 bg-emerald-500/10">
-              <span className="text-5xl font-mono font-black tracking-wider tabular-nums text-emerald-400">
+            <div className="rounded-xl px-4 py-3 bg-secondary/10">
+              <span className="text-5xl font-mono font-black tracking-wider tabular-nums text-secondary">
                 {formatTime(remain)}
                 <span className="text-2xl font-medium opacity-40 ml-1">LEFT</span>
               </span>

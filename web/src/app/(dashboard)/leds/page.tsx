@@ -2,13 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { useBleProvisioning } from '@/hooks/useBleProvisioning';
-import { BleConnectButton } from '@/components/ble/BleConnectButton';
-import { DeviceInfoCard } from '@/components/ble/DeviceInfoCard';
-import { WifiConfigForm } from '@/components/ble/WifiConfigForm';
-import { ProvisioningStatus } from '@/components/ble/ProvisioningStatus';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
 import { toast } from 'sonner';
 
 interface DisplayInfo {
@@ -34,11 +28,8 @@ export default function LedsPage() {
   const [showOverrideModal, setShowOverrideModal] = useState(false);
   const [overrideText, setOverrideText] = useState('');
   const [overrideColor, setOverrideColor] = useState('#FF0000');
-  const [showBleFlow, setShowBleFlow] = useState(false);
-  const [selectedBleDevice, setSelectedBleDevice] = useState<string | null>(null);
 
   const supabase = createClient();
-  const ble = useBleProvisioning();
 
   const discover = useCallback(async () => {
     setLoading(true);
@@ -60,23 +51,6 @@ export default function LedsPage() {
   }, [supabase]);
 
   useEffect(() => { discover(); }, [discover]);
-
-  useEffect(() => {
-    return () => {
-      ble.cancel();
-    };
-  }, [ble]);
-
-  useEffect(() => {
-    if (ble.state === 'SUCCESS') {
-      toast.success('Display provisioned successfully');
-      setShowBleFlow(false);
-      setSelectedBleDevice(null);
-      setTimeout(discover, 2000);
-    } else if (ble.state === 'WIFI_FAILED' || ble.state === 'ERROR') {
-      toast.error(ble.lastStatus?.failureReason ?? 'Provisioning failed');
-    }
-  }, [ble.state, ble.lastStatus, discover]);
 
   async function handleCourtChange(mac: string, courtId: string) {
     const court = courts.find(c => c.id === courtId);
@@ -124,80 +98,20 @@ export default function LedsPage() {
     setTimeout(discover, 2000);
   }
 
-  const selectedDevice = ble.devices.find((d) => d.id === selectedBleDevice) ?? null;
-
   return (
     <div className="p-6 space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">LED Displays</h1>
         <div className="flex gap-2">
-          <Button onClick={() => setShowBleFlow((v) => !v)} variant="secondary">
-            {showBleFlow ? 'Hide Bluetooth' : 'Provision via Bluetooth'}
-          </Button>
           <button
             onClick={discover}
-            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 cursor-pointer"
+            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 cursor-pointer font-medium"
             disabled={loading}
           >
             {loading ? 'Discovering...' : 'Refresh'}
           </button>
         </div>
       </div>
-
-      {showBleFlow && (
-        <Card className="p-4 space-y-4">
-          <div>
-            <h2 className="text-lg font-semibold">Provision New Display</h2>
-            <p className="text-sm text-muted-foreground">
-              Use Bluetooth to send Wi-Fi credentials to a new or unconfigured display.
-            </p>
-          </div>
-
-          <ProvisioningStatus status={ble.lastStatus} state={ble.state} />
-
-          {ble.error && <p className="text-sm text-red-400">{ble.error}</p>}
-
-          {ble.state === 'IDLE' && (
-            <BleConnectButton supported={ble.supported} scanning={false} onScan={ble.scan} />
-          )}
-
-          {ble.state === 'SCANNING' && (
-            <p className="text-sm text-muted-foreground">Scanning for devices...</p>
-          )}
-
-          {ble.state === 'IDLE' && ble.devices.length > 0 && (
-            <div className="grid gap-3 md:grid-cols-2">
-              {ble.devices.map((device) => (
-                <DeviceInfoCard
-                  key={device.id}
-                  device={device}
-                  identity={device.id === selectedBleDevice ? ble.identity : null}
-                  onConnect={(id) => { setSelectedBleDevice(id); ble.connect(id); }}
-                  connecting={ble.state === 'CONNECTING'}
-                  onScanNetworks={ble.loadNetworks}
-                  networks={ble.networks}
-                  loadingNetworks={false}
-                />
-              ))}
-            </div>
-          )}
-
-          {(ble.state === 'READY' || ble.state === 'CONFIGURING' || ble.state === 'WIFI_CONNECTING') && selectedDevice && (
-            <WifiConfigForm
-              networks={ble.networks}
-              onSubmit={ble.provision}
-              onCancel={ble.cancel}
-              submitting={ble.state === 'CONFIGURING' || ble.state === 'WIFI_CONNECTING'}
-            />
-          )}
-
-          {(ble.state === 'SUCCESS' || ble.state === 'WIFI_FAILED' || ble.state === 'ERROR') && (
-            <Button onClick={() => { setShowBleFlow(false); setSelectedBleDevice(null); }} variant="secondary">
-              Close
-            </Button>
-          )}
-        </Card>
-      )}
 
       {displays.length === 0 && !loading && (
         <p className="text-muted-foreground">No displays found. Make sure displays are online and connected to MQTT, then click Refresh.</p>
@@ -237,14 +151,14 @@ export default function LedsPage() {
                 <td className="p-2 flex gap-2">
                   <button
                     onClick={() => { setSelectedMac(d.mac); setOverrideText(''); setOverrideColor('#FF0000'); setShowOverrideModal(true); }}
-                    className="px-3 py-1 text-sm bg-orange-600 text-white rounded hover:bg-orange-700 cursor-pointer"
+                    className="px-3 py-1 text-sm bg-orange-600 text-white rounded hover:bg-orange-700 cursor-pointer font-medium"
                   >
                     Override
                   </button>
                   {d.overrideActive && (
                     <button
                       onClick={() => handleClearOverride(d.mac)}
-                      className="px-3 py-1 text-sm bg-gray-600 text-white rounded hover:bg-gray-700 cursor-pointer"
+                      className="px-3 py-1 text-sm bg-gray-600 text-white rounded hover:bg-gray-700 cursor-pointer font-medium"
                     >
                       Clear
                     </button>
@@ -258,7 +172,7 @@ export default function LedsPage() {
 
       {showOverrideModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-gray-900 p-6 rounded-lg shadow-xl w-[500px] space-y-4">
+          <div className="bg-white dark:bg-gray-900 p-6 rounded-lg w-[500px] space-y-4 shadow-none border">
             <h2 className="text-xl font-bold">Override Display</h2>
             <p className="text-sm text-muted-foreground font-mono">{selectedMac}</p>
             <div>
@@ -282,13 +196,13 @@ export default function LedsPage() {
             <div className="flex justify-end gap-2 pt-2">
               <button
                 onClick={() => setShowOverrideModal(false)}
-                className="px-4 py-2 border rounded cursor-pointer"
+                className="px-4 py-2 border rounded cursor-pointer font-medium"
               >
                 Cancel
               </button>
               <button
                 onClick={handleSendOverride}
-                className="px-4 py-2 bg-orange-600 text-white rounded hover:bg-orange-700 cursor-pointer"
+                className="px-4 py-2 bg-orange-600 text-white rounded hover:bg-orange-700 cursor-pointer font-medium"
               >
                 Send Override
               </button>

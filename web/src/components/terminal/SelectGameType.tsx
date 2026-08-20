@@ -28,16 +28,16 @@ export function SelectGameType({ member, onSelect, onBack, onCancel }: Props) {
             {/* Singles Card */}
             <button
               onClick={() => onSelect('1v1')}
-              className="group bg-zinc-900/40 border border-zinc-800 rounded-2xl p-6 text-center hover:border-emerald-500/50 hover:bg-emerald-500/[0.01] active:scale-[0.97] transition-all duration-300 cursor-pointer flex flex-col items-center justify-between min-h-[180px] shadow-lg shadow-black/10"
+              className="group bg-primary/40 border border-primary-foreground/20 rounded-2xl p-6 text-center hover:border-secondary/50 hover:bg-secondary/[0.01] active:scale-[0.97] transition-all duration-300 cursor-pointer flex flex-col items-center justify-between min-h-[180px] shadow-lg shadow-black/10"
             >
-              <div className="flex items-center justify-center gap-3 mt-2 text-zinc-400 group-hover:text-emerald-450 transition-colors">
+              <div className="flex items-center justify-center gap-3 mt-2 text-primary-foreground/80 group-hover:text-secondary transition-colors">
                 <User className="size-6 transition-transform duration-300 group-hover:-translate-x-1" />
                 <span className="text-xs font-semibold text-zinc-600">vs</span>
                 <User className="size-6 transition-transform duration-300 group-hover:translate-x-1" />
               </div>
 
               <div className="mt-4">
-                <div className="text-lg font-extrabold text-zinc-100 group-hover:text-emerald-300 transition-colors">
+                <div className="text-lg font-extrabold text-primary-foreground group-hover:text-secondary transition-colors">
                   Singles
                 </div>
                 <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider mt-0.5">
@@ -53,16 +53,16 @@ export function SelectGameType({ member, onSelect, onBack, onCancel }: Props) {
             {/* Doubles Card */}
             <button
               onClick={() => onSelect('2v2')}
-              className="group bg-zinc-900/40 border border-zinc-800 rounded-2xl p-6 text-center hover:border-emerald-500/50 hover:bg-emerald-500/[0.01] active:scale-[0.97] transition-all duration-300 cursor-pointer flex flex-col items-center justify-between min-h-[180px] shadow-lg shadow-black/10"
+              className="group bg-primary/40 border border-primary-foreground/20 rounded-2xl p-6 text-center hover:border-secondary/50 hover:bg-secondary/[0.01] active:scale-[0.97] transition-all duration-300 cursor-pointer flex flex-col items-center justify-between min-h-[180px] shadow-lg shadow-black/10"
             >
-              <div className="flex items-center justify-center gap-2 mt-2 text-zinc-400 group-hover:text-emerald-450 transition-colors">
+              <div className="flex items-center justify-center gap-2 mt-2 text-primary-foreground/80 group-hover:text-secondary transition-colors">
                 <Users className="size-6 transition-transform duration-300 group-hover:-translate-x-1" />
                 <span className="text-xs font-semibold text-zinc-600">vs</span>
                 <Users className="size-6 transition-transform duration-300 group-hover:translate-x-1" />
               </div>
 
               <div className="mt-4">
-                <div className="text-lg font-extrabold text-zinc-100 group-hover:text-emerald-300 transition-colors">
+                <div className="text-lg font-extrabold text-primary-foreground group-hover:text-secondary transition-colors">
                   Doubles
                 </div>
                 <div className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider mt-0.5">
@@ -79,7 +79,7 @@ export function SelectGameType({ member, onSelect, onBack, onCancel }: Props) {
 
         <button 
           onClick={onBack} 
-          className="py-3 px-4 rounded-xl border border-zinc-800 text-xs font-bold uppercase tracking-wider text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900 active:scale-95 transition-all cursor-pointer flex items-center justify-center gap-2 w-full"
+          className="py-3 px-4 rounded-xl border border-primary-foreground/20 text-xs font-bold uppercase tracking-wider text-primary-foreground/80 hover:text-primary-foreground hover:bg-primary-foreground/10 active:scale-95 transition-all cursor-pointer flex items-center justify-center gap-2 w-full"
         >
           <ArrowLeft className="size-3.5" />
           <span>Back to Court Selection</span>

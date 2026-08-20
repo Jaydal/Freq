@@ -35,7 +35,7 @@ export function ReservationOffer({ courtName, expiresAt, onAccept, onDecline, bu
           ? 'bg-red-500/10 border-red-500/30 shadow-[0_0_20px_rgba(239,68,68,0.15)] text-red-400'
           : isUrgent
           ? 'bg-amber-500/10 border-amber-550/30 shadow-[0_0_25px_rgba(245,158,11,0.25)] text-amber-400 animate-pulse'
-          : 'bg-emerald-550/10 border-emerald-500/30 shadow-[0_0_25px_rgba(16,185,129,0.2)] text-emerald-400'
+          : 'bg-secondary/10 border-secondary/30 shadow-[0_0_25px_rgba(50,164,94,0.2)] text-secondary'
       }`}>
         {expired ? (
           <X className="size-8 stroke-[2.5]" />
@@ -48,7 +48,7 @@ export function ReservationOffer({ courtName, expiresAt, onAccept, onDecline, bu
         <h1 className="text-xl font-black text-zinc-100 tracking-wide">
           {expired ? 'Offer Expired' : 'Your Court is Ready!'}
         </h1>
-        <p className="text-xs text-emerald-400 font-bold uppercase tracking-wider">
+        <p className="text-xs text-secondary font-bold uppercase tracking-wider">
           {courtName}
         </p>
       </div>
@@ -61,7 +61,7 @@ export function ReservationOffer({ courtName, expiresAt, onAccept, onDecline, bu
               ? 'border-red-500/20 bg-red-500/[0.02]' 
               : 'border-zinc-800 bg-zinc-900/30'
           }`}>
-            <p className={`text-4xl font-mono font-black tracking-tight tabular-nums ${isUrgent ? 'text-red-400' : 'text-emerald-400'}`}>
+            <p className={`text-4xl font-mono font-black tracking-tight tabular-nums ${isUrgent ? 'text-red-400' : 'text-secondary'}`}>
               {Math.floor(remaining / 60)}:{String(remaining % 60).padStart(2, '0')}
             </p>
             <p className="text-[10px] text-zinc-500 uppercase tracking-widest font-semibold mt-1">Remaining to claim</p>
@@ -78,17 +78,17 @@ export function ReservationOffer({ courtName, expiresAt, onAccept, onDecline, bu
             <button 
               onClick={onDecline} 
               disabled={busy}
-              className="flex-1 py-3.5 bg-zinc-900 border border-zinc-800 rounded-xl text-xs font-bold uppercase tracking-wider text-zinc-450 hover:text-zinc-200 hover:bg-zinc-800 active:scale-[0.98] transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+              className="flex-1 py-3.5 bg-primary-foreground/10 text-primary-foreground border border-primary-foreground/20 rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-primary-foreground/20 active:scale-[0.98] transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
             >
               Decline
             </button>
             <button 
               onClick={onAccept} 
               disabled={busy}
-              className={`flex-1 py-3.5 text-black font-extrabold rounded-xl text-xs uppercase tracking-wider active:scale-[0.98] transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 ${
+              className={`flex-1 py-3.5 text-white font-extrabold rounded-xl text-xs uppercase tracking-wider active:scale-[0.98] transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 ${
                 isUrgent
                   ? 'bg-amber-500 hover:bg-amber-450 shadow-md shadow-amber-500/10'
-                  : 'bg-emerald-500 hover:bg-emerald-450 shadow-md shadow-emerald-500/10'
+                  : 'bg-secondary hover:bg-secondary/90 shadow-md shadow-secondary/10'
               }`}
             >
               {busy ? (

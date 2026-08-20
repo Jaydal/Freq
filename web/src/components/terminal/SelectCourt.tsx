@@ -26,12 +26,12 @@ interface StatusConfig {
 
 const STATUS_STYLES: Record<string, StatusConfig> = {
   Available: {
-    badge: 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20',
+    badge: 'bg-secondary/10 text-secondary border border-secondary/20',
     badgeText: 'Available',
     label: 'Book now & start immediately',
     selectable: true,
     icon: Check,
-    themeClass: 'border-zinc-800 bg-zinc-900/50 hover:border-emerald-500/50 hover:bg-emerald-500/[0.02] hover:shadow-[0_0_20px_rgba(16,185,129,0.06)]'
+    themeClass: 'border-primary-foreground/20 bg-primary/50 hover:border-secondary/50 hover:bg-secondary/[0.02] hover:shadow-[0_0_20px_rgba(50,164,94,0.06)]'
   },
   Playing: {
     badge: 'bg-amber-500/10 text-amber-455 border border-amber-500/20',
@@ -39,7 +39,7 @@ const STATUS_STYLES: Record<string, StatusConfig> = {
     label: 'Tap to queue up next',
     selectable: true,
     icon: Users,
-    themeClass: 'border-zinc-800 bg-zinc-900/30 hover:border-amber-500/40 hover:bg-amber-500/[0.02] hover:shadow-[0_0_20px_rgba(245,158,11,0.04)]'
+    themeClass: 'border-primary-foreground/20 bg-primary/30 hover:border-amber-500/40 hover:bg-amber-500/[0.02] hover:shadow-[0_0_20px_rgba(245,158,11,0.04)]'
   },
   Reserved: {
     badge: 'bg-blue-500/10 text-blue-400 border border-blue-500/20',
@@ -47,7 +47,7 @@ const STATUS_STYLES: Record<string, StatusConfig> = {
     label: 'Tap to queue up next',
     selectable: true,
     icon: Calendar,
-    themeClass: 'border-zinc-800 bg-zinc-900/30 hover:border-blue-500/40 hover:bg-blue-500/[0.02] hover:shadow-[0_0_20px_rgba(59,130,246,0.04)]'
+    themeClass: 'border-primary-foreground/20 bg-primary/30 hover:border-blue-500/40 hover:bg-blue-500/[0.02] hover:shadow-[0_0_20px_rgba(59,130,246,0.04)]'
   },
   Maintenance: {
     badge: 'bg-red-500/10 text-red-400 border border-red-500/20',
@@ -87,23 +87,23 @@ export function SelectCourt({ member, courts, onSelect, onBack }: Props) {
             {/* Any Court option */}
             <button
               onClick={() => onSelect({ id: '', name: 'Any Court', status: 'Available' })}
-              className="group relative rounded-2xl p-5 text-left border-2 border-dashed border-emerald-500/35 bg-gradient-to-br from-emerald-950/20 via-zinc-900/50 to-zinc-950/30 hover:border-emerald-400/80 hover:from-emerald-950/30 active:scale-[0.98] transition-all duration-300 cursor-pointer shadow-md shadow-black/10"
+              className="group relative rounded-2xl p-5 text-left border-2 border-dashed border-secondary/35 bg-gradient-to-br from-secondary/20 via-primary/50 to-primary/30 hover:border-secondary/80 hover:from-secondary/30 active:scale-[0.98] transition-all duration-300 cursor-pointer shadow-md shadow-black/10"
             >
-              <div className="absolute top-4 right-4 text-emerald-400/60 group-hover:text-emerald-400 transition-colors">
+              <div className="absolute top-4 right-4 text-secondary/60 group-hover:text-secondary transition-colors">
                 <Sparkles className="size-5 animate-pulse" />
               </div>
               
               <div className="flex flex-col h-full justify-between">
                 <div>
                   <div className="flex items-center gap-2 mb-1.5">
-                    <span className="text-base font-extrabold text-zinc-100 group-hover:text-emerald-300 transition-colors">Any Court</span>
-                    <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 tracking-wider uppercase">
+                    <span className="text-base font-extrabold text-primary-foreground group-hover:text-secondary transition-colors">Any Court</span>
+                      <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-secondary/10 text-secondary border border-secondary/20 tracking-wider uppercase">
                       Auto
                     </span>
                   </div>
                   <span className="text-xs text-zinc-400 group-hover:text-zinc-300 transition-colors">System picks first available court</span>
                 </div>
-                <div className="text-[10px] text-emerald-500 font-semibold mt-3 flex items-center gap-1">
+                <div className="text-[10px] text-secondary font-semibold mt-3 flex items-center gap-1">
                   <span>⚡</span> Recommended for fastest play
                 </div>
               </div>
@@ -150,7 +150,7 @@ export function SelectCourt({ member, courts, onSelect, onBack }: Props) {
 
         <button 
           onClick={onBack} 
-          className="py-3 px-4 rounded-xl border border-zinc-800 text-xs font-bold uppercase tracking-wider text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900 active:scale-95 transition-all cursor-pointer flex items-center justify-center gap-2 w-full mt-2"
+          className="py-3 px-4 rounded-xl border border-primary-foreground/20 text-xs font-bold uppercase tracking-wider text-primary-foreground/80 hover:text-primary-foreground hover:bg-primary-foreground/10 active:scale-95 transition-all cursor-pointer flex items-center justify-center gap-2 w-full mt-2"
         >
           <ArrowLeft className="size-3.5" />
           <span>Exit Wizard</span>

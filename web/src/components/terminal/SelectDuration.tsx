@@ -44,24 +44,24 @@ export function SelectDuration({ member, durations, rates, onSelect, onBack, onC
                 <button
                   key={d}
                   onClick={() => onSelect(d)}
-                  className={`group relative bg-zinc-900/40 border rounded-2xl p-5 text-center transition-all duration-300 active:scale-[0.97] cursor-pointer flex flex-col items-center justify-between min-h-[160px] shadow-lg shadow-black/10 ${
+                  className={`group relative bg-primary/40 border border-primary-foreground/20 rounded-2xl p-5 text-center transition-all duration-300 active:scale-[0.97] cursor-pointer flex flex-col items-center justify-between min-h-[160px] shadow-lg shadow-black/10 ${
                     isPopular 
-                      ? 'border-emerald-500/50 bg-emerald-500/[0.01]' 
-                      : 'border-zinc-800 hover:border-zinc-700'
+                      ? 'border-secondary/50 bg-secondary/[0.01]' 
+                      : 'border-primary-foreground/20 hover:border-primary-foreground/30'
                   }`}
                 >
                   {isPopular && (
-                    <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 text-[8px] font-bold px-2 py-0.5 rounded-full bg-emerald-500 text-black tracking-wider uppercase shadow-sm">
+                     <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 text-[8px] font-bold px-2 py-0.5 rounded-full bg-secondary text-white tracking-wider uppercase shadow-sm">
                       Popular
                     </span>
                   )}
 
-                  <div className="text-zinc-500 group-hover:text-emerald-400/80 transition-colors mt-2">
+                  <div className="text-primary-foreground/80 group-hover:text-secondary transition-colors mt-2">
                     <Clock className="size-5" />
                   </div>
 
                   <div className="my-3">
-                    <span className="text-3xl font-black text-zinc-100 group-hover:text-emerald-300 transition-colors block leading-none">
+                    <span className="text-3xl font-black text-primary-foreground group-hover:text-secondary transition-colors block leading-none">
                       {d}
                     </span>
                     <span className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider mt-1">
@@ -71,7 +71,7 @@ export function SelectDuration({ member, durations, rates, onSelect, onBack, onC
 
                   <div className="w-full pt-2 border-t border-zinc-800/80">
                     <span className="block text-[10px] text-zinc-400 font-medium leading-none mb-1">{label}</span>
-                    <span className="block text-sm font-extrabold text-emerald-400">₱{total}</span>
+                    <span className="block text-sm font-extrabold text-secondary">₱{total}</span>
                   </div>
                 </button>
               );
@@ -81,7 +81,7 @@ export function SelectDuration({ member, durations, rates, onSelect, onBack, onC
 
         <button 
           onClick={onBack} 
-          className="py-3 px-4 rounded-xl border border-zinc-800 text-xs font-bold uppercase tracking-wider text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900 active:scale-95 transition-all cursor-pointer flex items-center justify-center gap-2 w-full"
+          className="py-3 px-4 rounded-xl border border-primary-foreground/20 text-xs font-bold uppercase tracking-wider text-primary-foreground/80 hover:text-primary-foreground hover:bg-primary-foreground/10 active:scale-95 transition-all cursor-pointer flex items-center justify-center gap-2 w-full"
         >
           <ArrowLeft className="size-3.5" />
           <span>Back to Game Format</span>

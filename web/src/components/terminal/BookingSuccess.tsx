@@ -15,7 +15,7 @@ export function BookingSuccess({ courtName, duration, creditsUsed, creditsRemain
       {/* Animated Success Badge */}
       <div className={`size-16 rounded-full border flex items-center justify-center transition-all duration-550 scale-100 animate-pulse-subtle ${
         isConfirmed 
-          ? 'bg-emerald-550/10 border-emerald-500/30 shadow-[0_0_20px_rgba(16,185,129,0.15)] text-emerald-400' 
+          ? 'bg-secondary/10 border-secondary/30 shadow-[0_0_20px_rgba(50,164,94,0.15)] text-secondary' 
           : 'bg-amber-500/10 border-amber-550/30 shadow-[0_0_20px_rgba(245,158,11,0.1)] text-amber-400'
       }`}>
         {isConfirmed ? (
@@ -46,7 +46,7 @@ export function BookingSuccess({ courtName, duration, creditsUsed, creditsRemain
         <div className="h-px bg-zinc-800/50" />
         <div className="flex justify-between items-center text-xs">
           <span className="text-zinc-500 font-medium">Remaining Balance</span>
-          <span className="font-bold text-emerald-400">₱{creditsRemaining.toLocaleString()}</span>
+          <span className="font-bold text-secondary">₱{creditsRemaining.toLocaleString()}</span>
         </div>
       </div>
 

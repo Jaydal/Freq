@@ -514,10 +514,10 @@ export function TerminalKiosk() {
     switch (step) {
       case 'idle':
       return (
-        <div className="relative min-h-screen bg-black">
+        <div className="relative min-h-screen bg-primary">
           <QueueBoard />
           {testMode && (
-            <div className="absolute top-4 right-4 z-50 bg-zinc-950/90 border border-zinc-800 rounded-xl p-4 w-64 shadow-2xl animate-fade-in">
+            <div className="absolute top-4 right-4 z-50 bg-primary/90 border border-zinc-800 rounded-xl p-4 w-64 shadow-2xl animate-fade-in">
               <h3 className="text-xs font-bold text-zinc-300 mb-2 flex items-center gap-1.5">
                 <span>🔧</span>
                 <span>Test RFID Input</span>
@@ -527,11 +527,11 @@ export function TerminalKiosk() {
                   ref={rfidRef}
                   type="text"
                   placeholder="Enter Card UID"
-                  className="flex-1 bg-zinc-900 border border-zinc-800 rounded-lg px-2.5 py-1.5 text-xs text-zinc-100 placeholder-zinc-650 focus:outline-none focus:border-zinc-700"
+                  className="flex-1 bg-background border border-zinc-800 rounded-lg px-2.5 py-1.5 text-xs text-zinc-100 placeholder-zinc-650 focus:outline-none focus:border-zinc-700"
                 />
                 <button
                   type="submit"
-                  className="bg-emerald-500 hover:bg-emerald-450 text-black text-xs font-extrabold px-3 py-1.5 rounded-lg active:scale-95 transition-all cursor-pointer"
+                  className="bg-secondary hover:bg-secondary/90 text-white text-xs font-extrabold px-3 py-1.5 rounded-lg active:scale-95 transition-all cursor-pointer"
                 >
                   Go
                 </button>
@@ -551,7 +551,7 @@ export function TerminalKiosk() {
             <h2 className="text-lg font-black text-zinc-100 tracking-wide">Active Booking Found</h2>
             <p className="text-xs text-zinc-400 mt-1 mb-6">You are already in the waiting list.</p>
             
-            <div className="bg-gradient-to-br from-zinc-900/40 to-zinc-950/20 border border-zinc-800/85 rounded-2xl p-5 mb-8 w-full max-w-sm text-left shadow-md shadow-black/10 space-y-4">
+            <div className="bg-gradient-to-br from-primary/40 to-primary/20 border border-primary-foreground/10 rounded-2xl p-5 mb-8 w-full max-w-sm text-left shadow-md shadow-black/10 space-y-4">
               <div className="flex justify-between items-center">
                 <span className="text-[10px] font-bold text-zinc-550 uppercase tracking-widest">Queue Status</span>
                 <span className="text-xs font-bold text-amber-455 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
@@ -572,14 +572,14 @@ export function TerminalKiosk() {
             <div className="flex flex-col gap-2.5 w-full max-w-xs">
               <button 
                 onClick={() => setStep('select-court')}
-                className="w-full py-3.5 px-6 rounded-xl bg-emerald-500 hover:bg-emerald-450 text-black font-extrabold text-xs uppercase tracking-wider active:scale-[0.98] transition-all cursor-pointer shadow-md shadow-emerald-500/10 flex items-center justify-center gap-2"
+                className="w-full py-3.5 px-6 rounded-xl bg-secondary hover:bg-secondary/90 text-white font-extrabold text-xs uppercase tracking-wider active:scale-[0.98] transition-all cursor-pointer shadow-md shadow-emerald-500/10 flex items-center justify-center gap-2"
               >
                 <Plus className="size-4 stroke-[2.5]" />
                 <span>Book Another Game</span>
               </button>
               <button 
                 onClick={handleCancelExisting}
-                className="w-full py-3.5 px-6 rounded-xl bg-transparent border border-zinc-800 text-zinc-500 hover:text-red-400 hover:border-red-500/45 hover:bg-red-500/[0.02] font-extrabold text-xs uppercase tracking-wider active:scale-[0.98] transition-all cursor-pointer flex items-center justify-center gap-2"
+                className="w-full py-3.5 px-6 rounded-xl bg-primary-foreground/10 text-primary-foreground border border-zinc-800 hover:text-red-400 hover:border-red-500/45 hover:bg-red-500/[0.02] font-extrabold text-xs uppercase tracking-wider active:scale-[0.98] transition-all cursor-pointer flex items-center justify-center gap-2"
               >
                 <Trash2 className="size-4" />
                 <span>Cancel Booking</span>
@@ -676,7 +676,7 @@ export function TerminalKiosk() {
         </div>
       )}
       {/* Active badge — auto-hides after 3s with fade */}
-      <div className={`fixed bottom-4 left-1/2 -translate-x-1/2 bg-emerald-500/90 text-black px-3 py-1.5 rounded-lg text-xs font-medium z-50 whitespace-nowrap transition-opacity duration-700 ${nfcBadgeVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+      <div className={`fixed bottom-4 left-1/2 -translate-x-1/2 bg-secondary/90 text-white px-3 py-1.5 rounded-lg text-xs font-medium z-50 whitespace-nowrap transition-opacity duration-700 ${nfcBadgeVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
         ✓ NFC Scanner Active
       </div>
     </>

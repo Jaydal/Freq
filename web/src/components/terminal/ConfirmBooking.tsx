@@ -48,7 +48,7 @@ export function ConfirmBooking({
           {/* Cost breakdown receipt */}
           <div className={`rounded-2xl border p-4 transition-all duration-300 shadow-md ${
             sufficient 
-              ? 'border-emerald-500/20 bg-gradient-to-br from-zinc-900/50 to-emerald-950/5 shadow-black/10' 
+              ? 'border-secondary/20 bg-gradient-to-br from-primary/50 to-secondary/5 shadow-black/10' 
               : 'border-red-500/20 bg-gradient-to-br from-zinc-900/50 to-red-950/5 shadow-black/10'
           }`}>
             <div className="flex items-center justify-between mb-3.5 pb-2 border-b border-zinc-800/80">
@@ -61,7 +61,7 @@ export function ConfirmBooking({
                   <AlertCircle className="size-3" /> Insufficient Credits
                 </span>
               ) : (
-                <span className="text-[9px] font-bold text-emerald-450 bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/20 flex items-center gap-1">
+                <span className="text-[9px] font-bold text-secondary bg-secondary/10 px-2.5 py-1 rounded-full border border-secondary/20 flex items-center gap-1">
                   <Check className="size-3" /> Ready
                 </span>
               )}
@@ -78,7 +78,7 @@ export function ConfirmBooking({
               <div className="h-px bg-zinc-800/80 my-2" />
               <div className="flex justify-between items-center">
                 <span className="text-xs font-bold text-zinc-300">Balance After Booking</span>
-                <span className={`font-black text-base tracking-tight ${sufficient ? 'text-emerald-400' : 'text-red-450'}`}>
+                <span className={`font-black text-base tracking-tight ${sufficient ? 'text-secondary' : 'text-red-450'}`}>
                   ₱{remaining.toLocaleString()}
                 </span>
               </div>
@@ -109,7 +109,7 @@ export function ConfirmBooking({
         <div className="flex gap-3 mt-4">
           <button
             onClick={onBack}
-            className="flex-1 py-3.5 bg-zinc-900 border border-zinc-800 text-zinc-450 rounded-xl text-xs font-bold uppercase tracking-wider hover:text-zinc-200 hover:bg-zinc-800 active:scale-[0.98] transition-all cursor-pointer flex items-center justify-center gap-2"
+            className="flex-1 py-3.5 bg-primary-foreground/10 text-primary-foreground border border-primary-foreground/20 rounded-xl text-xs font-bold uppercase tracking-wider hover:text-primary-foreground hover:bg-primary-foreground/10 active:scale-[0.98] transition-all cursor-pointer flex items-center justify-center gap-2"
           >
             <ArrowLeft className="size-4" />
             <span>Back</span>
@@ -118,7 +118,7 @@ export function ConfirmBooking({
           <button
             onClick={onConfirm}
             disabled={busy || !sufficient}
-            className="flex-[2] py-3.5 bg-emerald-500 text-black font-extrabold rounded-xl text-xs uppercase tracking-wider disabled:opacity-30 disabled:cursor-not-allowed hover:bg-emerald-450 active:scale-[0.98] transition-all cursor-pointer shadow-md shadow-emerald-500/10 hover:shadow-emerald-500/20 flex items-center justify-center gap-2"
+            className="flex-[2] py-3.5 bg-secondary text-white font-extrabold rounded-xl text-xs uppercase tracking-wider disabled:opacity-30 disabled:cursor-not-allowed hover:bg-secondary/90 active:scale-[0.98] transition-all cursor-pointer shadow-md shadow-secondary/10 hover:shadow-secondary/20 flex items-center justify-center gap-2"
           >
             {busy ? (
               <>

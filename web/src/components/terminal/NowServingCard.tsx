@@ -34,11 +34,11 @@ export function NowServingCard({ playerNames, courtName, duration, expiresAt }: 
   }
 
   return (
-    <div className="bg-zinc-900 rounded-lg p-4 border border-emerald-500/30">
-      <p className="text-xs font-medium text-emerald-400 uppercase tracking-wider mb-1">Now Serving</p>
+    <div className="bg-primary rounded-lg p-4 border border-secondary/30">
+      <p className="text-xs font-medium text-secondary uppercase tracking-wider mb-1">Now Serving</p>
       <p className="text-lg font-semibold text-zinc-100 mb-0.5">{playerNames}</p>
       <p className="text-xs text-zinc-500 mb-2">{courtName} &middot; {duration} min</p>
-      <p className={`text-3xl font-mono font-bold tabular-nums ${isUrgent ? 'text-red-400' : 'text-emerald-400'}`}>
+      <p className={`text-3xl font-mono font-bold tabular-nums ${isUrgent ? 'text-red-400' : 'text-secondary'}`}>
         {formatCountdown(remaining)}
       </p>
       <p className="text-xs text-zinc-500 mt-1">remaining to confirm</p>

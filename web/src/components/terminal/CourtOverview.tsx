@@ -34,7 +34,7 @@ function CourtOverviewItem({ court }: { court: CourtState }) {
   const remain = isActive ? Math.max(0, totalSec - elapsed) : 0;
 
   return (
-    <div className={`shrink-0 w-[140px] sm:w-auto rounded px-2 py-1.5 border ${isActive ? 'bg-zinc-900 border-emerald-500/20' : 'bg-zinc-900/50 border-zinc-800'}`}>
+    <div className={`shrink-0 w-[140px] sm:w-auto rounded px-2 py-1.5 border ${isActive ? 'bg-primary border-secondary/20' : 'bg-zinc-900/50 border-zinc-800'}`}>
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1.5 overflow-hidden">
           <span className={`size-1.5 shrink-0 rounded-full ${isActive ? 'bg-emerald-400' : 'bg-zinc-600'}`} />
@@ -91,7 +91,7 @@ export function CourtOverview() {
   }, [fetchAll]);
 
   return (
-    <div className="h-full flex flex-col p-3 gap-1.5 bg-zinc-950">
+    <div className="h-full flex flex-col p-3 gap-1.5 bg-primary">
       <h2 className="text-xs font-medium text-zinc-500 uppercase tracking-wider hidden sm:block">Courts</h2>
       <div className="flex sm:flex-col gap-2 sm:gap-1 overflow-x-auto sm:overflow-x-hidden sm:overflow-y-auto pb-1 sm:pb-0 no-scrollbar">
         {courts.map(c => (
