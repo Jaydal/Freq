@@ -20,7 +20,7 @@ Timeout: 5000ms
 
 Call log:
   - Expect "toHaveTitle" with timeout 5000ms
-    14 × locator resolved to <html lang="en" class="dark">…</html>
+    14 × locator resolved to <html lang="en" class="light">…</html>
        - unexpected value "Paddle Point — Pickleball Court Management"
 
 ```

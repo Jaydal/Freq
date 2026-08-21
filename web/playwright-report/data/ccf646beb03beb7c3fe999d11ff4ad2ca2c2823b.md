@@ -6,36 +6,44 @@
 
 # Test info
 
-- Name: rfid-bulk-registration.spec.ts >> Bulk RFID Registration >> loads the bulk RFID registration page with correct title
-- Location: tests/e2e/rfid-bulk-registration.spec.ts:31:3
+- Name: rfid-bulk-registration.spec.ts >> Bulk RFID Registration >> prevents duplicate registration and shows warning
+- Location: tests/e2e/rfid-bulk-registration.spec.ts:80:3
 
 # Error details
 
 ```
-Error: expect(page).toHaveTitle(expected) failed
+Test timeout of 30000ms exceeded.
+```
 
-Expected pattern: /Bulk RFID Registration/
-Received string:  "Paddle Point — Pickleball Court Management"
-Timeout: 5000ms
-
+```
+Error: locator.fill: Test timeout of 30000ms exceeded.
 Call log:
-  - Expect "toHaveTitle" with timeout 5000ms
-    14 × locator resolved to <html lang="en" class="dark">…</html>
-       - unexpected value "Paddle Point — Pickleball Court Management"
+  - waiting for locator('input[placeholder*="RFID" i], input[placeholder*="UID" i], input[aria-label*="RFID" i], input[aria-label*="UID" i]').first()
 
 ```
 
+# Page snapshot
+
 ```yaml
-- text: Sign in Enter your email and password to access the portal Email
-- textbox "Email":
-  - /placeholder: m@example.com
-- text: Password
-- textbox "Password"
-- link "Forgot password?":
-  - /url: /forgot-password
-- button "Sign In"
-- region "Notifications alt+T"
-- alert
+- generic [active] [ref=e1]:
+  - generic [ref=e3]:
+    - generic [ref=e4]:
+      - generic [ref=e5]: Sign in
+      - generic [ref=e6]: Enter your email and password to access the portal
+    - generic [ref=e8]:
+      - generic [ref=e9]:
+        - generic [ref=e10]: Email
+        - textbox "Email" [ref=e11]:
+          - /placeholder: m@example.com
+      - generic [ref=e12]:
+        - generic [ref=e13]: Password
+        - textbox "Password" [ref=e14]
+      - link "Forgot password?" [ref=e16] [cursor=pointer]:
+        - /url: /forgot-password
+      - button "Sign In" [ref=e17]
+  - region "Notifications alt+T"
+  - button "Open Next.js Dev Tools" [ref=e23] [cursor=pointer]
+  - alert [ref=e27]
 ```
 
 # Test source
@@ -76,8 +84,7 @@ Call log:
   33  |     await page.goto('/rfid/bulk');
   34  |     await page.waitForLoadState('networkidle');
   35  | 
-> 36  |     await expect(page).toHaveTitle(/Bulk RFID Registration/);
-      |                        ^ Error: expect(page).toHaveTitle(expected) failed
+  36  |     await expect(page).toHaveTitle(/Bulk RFID Registration/);
   37  |   });
   38  | 
   39  |   test('displays the simulated RFID input', async ({ page }) => {
@@ -128,7 +135,8 @@ Call log:
   84  | 
   85  |     const input = page.locator('input[placeholder*="RFID" i], input[placeholder*="UID" i], input[aria-label*="RFID" i], input[aria-label*="UID" i]').first();
   86  | 
-  87  |     await input.fill(uid);
+> 87  |     await input.fill(uid);
+      |                 ^ Error: locator.fill: Test timeout of 30000ms exceeded.
   88  |     await input.press('Enter');
   89  |     await page.waitForSelector(`text=${uid}`, { timeout: 10000 });
   90  | 
@@ -178,4 +186,15 @@ Call log:
   134 | 
   135 |     const row = page.locator(`tr:has-text("${uid}")`);
   136 |     const deleteButton = row.locator('button[aria-label*="Delete" i], button:has-text("Delete")').first();
+  137 |     await deleteButton.click();
+  138 | 
+  139 |     const confirmButton = page.locator('button:has-text("Confirm"), button:has-text("Delete"), [data-testid="confirm-delete"]').first();
+  140 |     if (await confirmButton.isVisible({ timeout: 2000 }).catch(() => false)) {
+  141 |       await confirmButton.click();
+  142 |     }
+  143 | 
+  144 |     await expect(row).not.toBeVisible({ timeout: 10000 });
+  145 |   });
+  146 | });
+  147 | 
 ```

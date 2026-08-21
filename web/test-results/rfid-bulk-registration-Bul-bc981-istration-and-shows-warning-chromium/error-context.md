@@ -42,14 +42,8 @@ Call log:
         - /url: /forgot-password
       - button "Sign In" [ref=e17]
   - region "Notifications alt+T"
-  - button "Open Next.js Dev Tools" [ref=e23] [cursor=pointer]:
-    - generic [ref=e26]:
-      - text: Compiling
-      - generic [ref=e27]:
-        - generic [ref=e28]: .
-        - generic [ref=e29]: .
-        - generic [ref=e30]: .
-  - alert [ref=e31]
+  - button "Open Next.js Dev Tools" [ref=e23] [cursor=pointer]
+  - alert [ref=e27]
 ```
 
 # Test source
