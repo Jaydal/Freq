@@ -49,3 +49,6 @@ next-env.d.ts
 *.db-journal
 agent/
 .agents/
+assets/
+node_modules/
+*.bak
